@@ -41,7 +41,9 @@ func _ready():
     sprite.texture = load("res://assets/bosses/killing_floor_rotor.png")
     sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
     sprite.position = Vector2(0, -27)
-    sprite.scale = Vector2(0.29, 0.29)
+    # The CI-safe production asset is 75% of the source dimensions; this scale
+    # preserves the intended ~65px boss silhouette at the 240x160 game view.
+    sprite.scale = Vector2(0.39, 0.39)
     add_child(sprite)
 
     health = HealthComponent.new()
@@ -211,7 +213,7 @@ func _on_died():
         damage_area.set_deferred("monitorable", false)
     GameState.register_enemy_kill(1500)
     var tween = create_tween()
-    tween.tween_property(sprite, "scale", Vector2(0.36, 0.22), 0.10)
+    tween.tween_property(sprite, "scale", Vector2(0.47, 0.29), 0.10)
     tween.tween_property(sprite, "modulate", Color(0.35, 1.0, 0.28, 0.0), 0.38)
     tween.finished.connect(_finish_death)
 

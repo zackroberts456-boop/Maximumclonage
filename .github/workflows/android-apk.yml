@@ -65,7 +65,7 @@ jobs:
 
           # Guard the Stage 1 production boss asset against silent truncation.
           if [ -f "$PROJECT_DIR/assets/bosses/killing_floor_rotor.png" ]; then
-            echo "5dbfe3361cd0b7b61da1421a7e4e7db7bcdcf77aa87c9222c3850fc4821b0d2e  $PROJECT_DIR/assets/bosses/killing_floor_rotor.png" | sha256sum -c -
+            echo "558d17745c5302a3396265fc9eaaa1e576c7fe80edeffc715e3e3084723acdc8  $PROJECT_DIR/assets/bosses/killing_floor_rotor.png" | sha256sum -c -
           fi
 
       - name: Set up Java 17
