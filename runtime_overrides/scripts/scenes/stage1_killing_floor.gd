@@ -10,7 +10,6 @@ const TouchControls = preload("res://scripts/ui/touch_controls.gd")
 
 const STAGE_ID = "stage_01_killing_floor"
 const STAGE_LENGTH = 2320.0
-const FLOOR_Y = 136.0
 const TILE_SIZE = 16
 
 var player
@@ -72,12 +71,12 @@ func _build_background():
     _add_world_label(Vector2(1610, 42), "SECTOR C // PURGE LINE", Color(1.0, 0.72, 0.22, 0.42))
 
 func _build_geometry():
-    # Main route: short readable gaps, escalating platform rhythm, no blind leaps.
+    # Main route. Gaps are capped at 40 px so even the slowest character clears them.
     _add_solid_rect(Rect2(0, 136, 400, 24), 0, true)
-    _add_solid_rect(Rect2(448, 136, 384, 24), 0, true)
+    _add_solid_rect(Rect2(440, 136, 392, 24), 0, true)
     _add_solid_rect(Rect2(832, 136, 320, 24), 0, true)
-    _add_solid_rect(Rect2(1200, 136, 432, 24), 0, true)
-    _add_solid_rect(Rect2(1680, 136, 640, 24), 0, true)
+    _add_solid_rect(Rect2(1192, 136, 440, 24), 0, true)
+    _add_solid_rect(Rect2(1672, 136, 648, 24), 0, true)
 
     # Alternate/high-ground route. All characters can make every jump.
     _add_solid_rect(Rect2(176, 104, 128, 16), 1, false)
@@ -93,7 +92,7 @@ func _build_geometry():
     _add_solid_rect(Rect2(2032, 104, 112, 16), 1, false)
     _add_solid_rect(Rect2(2160, 88, 96, 16), 1, false)
 
-    # Cover/door-frame obstacles that force short hops and firing-angle changes.
+    # Cover/door-frame obstacles force short hops and firing-angle changes.
     _add_solid_rect(Rect2(352, 112, 16, 24), 1, false)
     _add_solid_rect(Rect2(784, 112, 16, 24), 1, false)
     _add_solid_rect(Rect2(1136, 104, 16, 32), 1, false)
@@ -132,7 +131,7 @@ func _add_solid_rect(rect: Rect2, tile_variant: int, hazard_edge: bool):
     var edge = Line2D.new()
     edge.points = PackedVector2Array([
         Vector2(rect.position.x, rect.position.y + 1),
-        Vector2(rect.end.x, rect.position.y + 1)
+        Vector2(rect.position.x + rect.size.x, rect.position.y + 1)
     ])
     edge.width = 1.0
     edge.default_color = Color(1.0, 0.55, 0.12, 0.62) if hazard_edge else Color(0.35, 1.0, 0.20, 0.48)
@@ -189,7 +188,7 @@ func _spawn_gameplay():
     add_child(pickup)
 
     _spawn_checkpoint(Vector2(848, 118), Vector2(864, 118))
-    _spawn_checkpoint(Vector2(1648, 118), Vector2(1696, 118))
+    _spawn_checkpoint(Vector2(1640, 118), Vector2(1696, 118))
 
 func _spawn_enemy(pos: Vector2):
     var enemy = TestEnemy.new()
@@ -207,9 +206,11 @@ func _build_ui():
     hud.setup(player)
     add_child(hud)
 
-    var debug = DebugOverlay.new()
-    debug.setup(player)
-    add_child(debug)
+    # Debug tools remain available on desktop but never obscure a normal mobile build.
+    if not OS.has_feature("mobile"):
+        var debug = DebugOverlay.new()
+        debug.setup(player)
+        add_child(debug)
 
     var touch_layer = CanvasLayer.new()
     touch_layer.layer = 40
