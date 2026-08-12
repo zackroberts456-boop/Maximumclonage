@@ -43,6 +43,11 @@ func _initialize():
         if ResourceLoader.exists(path):
             _check(load(path) != null, "resource parses/loads: %s" % path)
 
+    _check_texture_size("res://assets/enemies/clone_grunt_production.png", Vector2(224, 224), "production clone grunt dimensions")
+    _check_texture_size("res://assets/enemies/acid_spitter_production.png", Vector2(224, 224), "production Acid Spitter dimensions")
+    _check_texture_size("res://assets/environment/lab_environment_prod_v2.png", Vector2(240, 976), "production lab atlas dimensions")
+    _check_texture_size("res://assets/environment/lab_tiles_prod_16.png", Vector2(128, 16), "production lab tile dimensions")
+
     if failures.is_empty():
         print("MAXIMUM CLONAGE FOUNDATION SMOKE TEST: PASS")
         quit(0)
@@ -51,6 +56,16 @@ func _initialize():
             push_error(failure)
         print("MAXIMUM CLONAGE FOUNDATION SMOKE TEST: FAIL (%d)" % failures.size())
         quit(1)
+
+func _check_texture_size(path: String, expected_size: Vector2, description: String):
+    if not ResourceLoader.exists(path):
+        failures.append(description)
+        return
+    var texture = load(path)
+    if texture == null or not texture.has_method("get_size"):
+        failures.append(description)
+        return
+    _check(texture.get_size() == expected_size, description)
 
 func _check(condition, description):
     if not condition:
