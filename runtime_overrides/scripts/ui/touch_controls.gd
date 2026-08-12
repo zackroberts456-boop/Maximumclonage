@@ -102,21 +102,20 @@ func _update_dpad(pos):
 func _draw():
     if not visible:
         return
-
     _draw_dpad()
     for action_name in BUTTONS.keys():
         _draw_action_button(action_name)
 
 func _draw_dpad():
     var active = pressed_dpad_direction != Vector2.ZERO
-    var base_alpha = 0.20 if not active else 0.30
-    var edge_alpha = 0.34 if not active else 0.54
+    var base_alpha = 0.18 if not active else 0.29
+    var edge_alpha = 0.34 if not active else 0.56
     var plate = Color(0.04, 0.07, 0.06, base_alpha)
     var edge = Color(0.78, 0.94, 0.86, edge_alpha)
-    var glow = Color(0.45, 1.0, 0.30, 0.26 if active else 0.10)
+    var glow = Color(0.45, 1.0, 0.30, 0.26 if active else 0.08)
 
-    draw_circle(DPAD_CENTER, 11.0, plate)
-    draw_circle(DPAD_CENTER, 11.0, edge, false, 1.0)
+    draw_circle(DPAD_CENTER, 11.0, plate, true, -1.0, true)
+    draw_circle(DPAD_CENTER, 11.0, edge, false, 1.0, true)
 
     var dirs = {
         "up": Vector2(0, -1),
@@ -128,13 +127,13 @@ func _draw_dpad():
         var dir = dirs[key]
         var center = DPAD_CENTER + dir * DPAD_VISUAL_OFFSET
         var is_pressed = _direction_matches(dir)
-        var local_plate = Color(0.05, 0.08, 0.07, 0.42 if is_pressed else base_alpha)
-        var local_edge = Color(0.55, 1.0, 0.34, 0.72) if is_pressed else edge
-        draw_circle(center, 12.5, local_plate)
-        draw_circle(center, 12.5, local_edge, false, 1.0)
+        var local_plate = Color(0.05, 0.08, 0.07, 0.44 if is_pressed else base_alpha)
+        var local_edge = Color(0.55, 1.0, 0.34, 0.74) if is_pressed else edge
+        draw_circle(center, 12.5, local_plate, true, -1.0, true)
+        draw_circle(center, 12.5, local_edge, false, 1.0, true)
         if is_pressed:
-            draw_circle(center, 8.5, glow)
-        _draw_arrow(center, dir, Color(0.92, 1.0, 0.94, 0.72 if is_pressed else 0.50))
+            draw_circle(center, 8.5, glow, true, -1.0, true)
+        _draw_arrow(center, dir, Color(0.92, 1.0, 0.94, 0.76 if is_pressed else 0.48))
 
 func _direction_matches(cardinal: Vector2):
     if cardinal.x != 0.0:
@@ -157,23 +156,22 @@ func _draw_action_button(action_name: String):
     var center = data["center"]
     var radius = float(data["visual_radius"])
     var pressed = InputRouter.is_action_pressed_mc(action_name)
-    var fill = Color(0.04, 0.07, 0.06, 0.46 if pressed else 0.20)
-    var edge = Color(0.55, 1.0, 0.34, 0.78) if pressed else Color(0.82, 0.94, 0.88, 0.38)
-    var inner = Color(0.42, 1.0, 0.26, 0.23 if pressed else 0.07)
+    var fill = Color(0.04, 0.07, 0.06, 0.46 if pressed else 0.18)
+    var edge = Color(0.55, 1.0, 0.34, 0.80) if pressed else Color(0.82, 0.94, 0.88, 0.36)
+    var inner = Color(0.42, 1.0, 0.26, 0.24 if pressed else 0.06)
 
-    draw_circle(center, radius, fill)
-    draw_circle(center, radius, edge, false, 1.0)
-    draw_circle(center, radius - 3.0, inner)
+    draw_circle(center, radius, fill, true, -1.0, true)
+    draw_circle(center, radius, edge, false, 1.0, true)
+    draw_circle(center, radius - 3.0, inner, true, -1.0, true)
 
     var label = str(data["label"])
     var font_size = 5 if label.length() > 2 else 6
-    var width = ThemeDB.fallback_font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
     draw_string(
         ThemeDB.fallback_font,
-        center + Vector2(-width * 0.5, 2),
+        center + Vector2(-radius, 2),
         label,
-        HORIZONTAL_ALIGNMENT_LEFT,
-        -1,
+        HORIZONTAL_ALIGNMENT_CENTER,
+        radius * 2.0,
         font_size,
-        Color(0.96, 1.0, 0.97, 0.88)
+        Color(0.96, 1.0, 0.97, 0.90)
     )
