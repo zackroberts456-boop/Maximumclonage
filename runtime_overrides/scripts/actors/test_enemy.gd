@@ -4,18 +4,16 @@ const HealthComponent = preload("res://scripts/components/health_component.gd")
 const GameRules = preload("res://scripts/data/game_rules.gd")
 const Projectile = preload("res://scripts/weapons/projectile.gd")
 
-const WALK_ATLAS = "res://assets/enemies/clone_grunt_walk8_clean.png"
-const WALK_FRAME_SIZE = Vector2i(192, 176)
-const PATROL_RADIUS = 64.0
-const ACTIVATION_RANGE = 196.0
-const SHOOT_MIN_RANGE = 62.0
-const SHOOT_MAX_RANGE = 132.0
-const RETREAT_RANGE = 42.0
+const PATROL_RADIUS = 70.0
+const ACTIVATION_RANGE = 205.0
+const SHOOT_MIN_RANGE = 66.0
+const SHOOT_MAX_RANGE = 138.0
+const RETREAT_RANGE = 44.0
 
 var spawn_x = 0.0
 var patrol_direction = -1
-var speed = 29.0
-var fire_interval = 1.0
+var speed = 31.0
+var fire_interval = 0.98
 var projectile_speed = 118.0
 var shoot_timer = 0.35
 var dead = false
@@ -23,6 +21,7 @@ var health
 var sprite
 var damage_area
 var current_state = "patrol"
+var walk_phase = 0.0
 
 func _ready():
     add_to_group("enemies")
@@ -41,13 +40,14 @@ func _ready():
     collider.position = Vector2(0, -3)
     add_child(collider)
 
-    sprite = AnimatedSprite2D.new()
+    # The foundation was shrinking an already game-sized production sprite to 50%,
+    # which destroyed detail. Keep the original art and display it closer to native size.
+    sprite = Sprite2D.new()
+    sprite.texture = load("res://assets/enemies/clone_grunt_idle.png")
     sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-    sprite.position = Vector2(0, -18)
-    sprite.scale = Vector2(0.46, 0.46)
-    sprite.sprite_frames = _build_sprite_frames(load(WALK_ATLAS))
+    sprite.scale = Vector2(0.70, 0.70)
+    sprite.position = Vector2(0, -19)
     add_child(sprite)
-    sprite.play("walk")
 
     health = HealthComponent.new()
     health.configure(4, 0.10)
@@ -75,7 +75,7 @@ func _physics_process(delta):
         velocity.y += GameRules.GRAVITY * delta
 
     var player = get_tree().get_first_node_in_group("players")
-    var desired_x = patrol_direction * speed
+    var desired_x = patrol_direction * speed * 0.72
 
     if player != null and not player.dead:
         var dx = player.global_position.x - global_position.x
@@ -88,14 +88,14 @@ func _physics_process(delta):
 
             if distance_x < RETREAT_RANGE:
                 current_state = "retreat"
-                desired_x = -target_dir * speed * 0.82
+                desired_x = -target_dir * speed * 0.88
             elif distance_x < SHOOT_MIN_RANGE:
                 current_state = "hold"
                 desired_x = 0.0
                 _try_shoot(player)
             elif distance_x <= SHOOT_MAX_RANGE:
                 current_state = "strafe"
-                desired_x = target_dir * speed * 0.35
+                desired_x = target_dir * speed * 0.42
                 _try_shoot(player)
             else:
                 current_state = "chase"
@@ -116,19 +116,22 @@ func _physics_process(delta):
     velocity.x = desired_x
     move_and_slide()
 
-    if is_on_wall() and abs(velocity.x) > 0.01:
+    if is_on_wall():
         patrol_direction *= -1
 
     if current_state == "patrol" and abs(global_position.x - spawn_x) > PATROL_RADIUS:
         patrol_direction = -1 if global_position.x > spawn_x else 1
 
-    if abs(velocity.x) > 1.0:
-        if sprite.animation != "walk":
-            sprite.play("walk")
-        sprite.speed_scale = clamp(abs(velocity.x) / max(1.0, speed), 0.7, 1.25)
+    # Until the full enemy sheet is normalized into production frames, make locomotion
+    # unmistakable with a restrained two-pixel gait rather than a frozen cardboard cutout.
+    if abs(velocity.x) > 1.0 and is_on_floor():
+        walk_phase += delta * (11.0 + abs(velocity.x) * 0.03)
+        sprite.position.y = -19.0 + sin(walk_phase) * 1.25
+        sprite.rotation = sin(walk_phase * 0.5) * 0.012
         sprite.flip_h = velocity.x < 0.0
     else:
-        sprite.speed_scale = 0.45
+        sprite.position.y = lerp(sprite.position.y, -19.0, min(1.0, delta * 12.0))
+        sprite.rotation = lerp(sprite.rotation, 0.0, min(1.0, delta * 12.0))
 
     if global_position.y > 190.0:
         queue_free()
@@ -142,8 +145,8 @@ func _patrol_velocity():
 
 func _has_floor_ahead(direction: int):
     var space_state = get_world_2d().direct_space_state
-    var from = global_position + Vector2(direction * 12.0, -2.0)
-    var to = from + Vector2(0.0, 30.0)
+    var from = global_position + Vector2(direction * 12.0, -1.0)
+    var to = from + Vector2(0.0, 34.0)
     var query = PhysicsRayQueryParameters2D.create(from, to, 1)
     query.exclude = [get_rid()]
     return not space_state.intersect_ray(query).is_empty()
@@ -156,21 +159,7 @@ func _try_shoot(player):
     var projectile = Projectile.new()
     projectile.setup(direction, projectile_speed, 1, "enemy")
     get_tree().current_scene.add_child(projectile)
-    projectile.global_position = global_position + Vector2(sign(direction.x) * 18.0, -10)
-
-func _build_sprite_frames(texture):
-    var frames = SpriteFrames.new()
-    if frames.has_animation("default"):
-        frames.remove_animation("default")
-    frames.add_animation("walk")
-    frames.set_animation_loop("walk", true)
-    frames.set_animation_speed("walk", 10.0)
-    for index in range(8):
-        var atlas = AtlasTexture.new()
-        atlas.atlas = texture
-        atlas.region = Rect2(index * WALK_FRAME_SIZE.x, 0, WALK_FRAME_SIZE.x, WALK_FRAME_SIZE.y)
-        frames.add_frame("walk", atlas)
-    return frames
+    projectile.global_position = global_position + Vector2(sign(direction.x) * 20.0, -10)
 
 func take_damage(amount, source_position = Vector2.ZERO):
     if dead:
