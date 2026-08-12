@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3]
 
-[ext_resource path="res://scripts/scenes/stage1_killing_floor.gd" type="Script" id="1"]
+[ext_resource path="res://scripts/scenes/stage1_killing_floor_v06.gd" type="Script" id="1"]
 
 [node name="Stage1KillingFloor" type="Node2D"]
 script = ExtResource("1")
