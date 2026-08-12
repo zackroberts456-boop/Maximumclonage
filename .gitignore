@@ -1,0 +1,17 @@
+# Godot imports and local editor state
+.godot/
+
+# Extracted runtime projects and CI/local staging directories
+.android-build/
+.android-sdk/
+.build/
+MaximumClonage_Runtime_Project/
+
+# Generated Android artifacts
+builds/
+exports/
+*.apk
+*.aab
+
+# Temporary files
+*.tmp
