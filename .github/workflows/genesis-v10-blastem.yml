@@ -1,0 +1,69 @@
+name: BlastEm QA Maximum Clonage Genesis v1.0
+
+on:
+  push:
+    branches: [genesis-rom-build]
+    paths:
+      - 'ci/blastem_source_smoke.sh'
+      - '.github/workflows/genesis-v10-blastem.yml'
+  workflow_dispatch:
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rebuild v1.0 production and profile ROMs
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p build/sgdk
+          cat \
+            ci/sgdk_v04_zip/part00.b64 ci/sgdk_v04_zip/part01.b64 \
+            ci/sgdk_v04_zip/part02.b64 ci/sgdk_v04_zip/part03.b64 \
+            ci/sgdk_v04_zip/part04.b64 ci/sgdk_v04_zip/part05.b64 \
+            ci/sgdk_v04_zip/part06a.b64 ci/sgdk_v04_zip/part06b.b64 \
+            ci/sgdk_v04_zip/part06c.b64 ci/sgdk_v04_zip/part06d.b64 \
+            ci/sgdk_v04_zip/part06e.b64 ci/sgdk_v04_zip/part06f.b64 \
+            ci/sgdk_v04_zip/part07a.b64 ci/sgdk_v04_zip/part07b.b64 \
+            ci/sgdk_v04_zip/part07c0.b64 ci/sgdk_v04_zip/part07c1.b64 \
+            ci/sgdk_v04_zip/part07c2.b64 ci/sgdk_v04_zip/part07c3.b64 \
+            ci/sgdk_v04_zip/part07d0.b64 ci/sgdk_v04_zip/part07d1.b64 \
+            ci/sgdk_v04_zip/part07d2.b64 \
+            | tr -cd 'A-Za-z0-9+/=' | base64 --decode > build/source.zip
+          unzip -q build/source.zip -d build/sgdk
+          PROJECT_DIR="$(find build/sgdk -type f -name Makefile -printf '%h\n' | head -1)"
+          python3 -m pip install --disable-pip-version-check --quiet pillow
+          for v in 05 06 07 08 09 10; do python3 "ci/v${v}_transform.py" "$PROJECT_DIR"; done
+          chmod -R a+rwX "$PROJECT_DIR"
+          (cd "$PROJECT_DIR" && docker run --rm -v "$PWD:/m68k" -t registry.gitlab.com/doragasu/docker-sgdk:v2.11)
+          cp "$PROJECT_DIR/out/rom.bin" Maximum_Clonage_Stage1_v1_0.bin
+          python3 ci/v06_profile_patch.py "$PROJECT_DIR" build/profile-v10
+          chmod -R a+rwX build/profile-v10
+          (cd build/profile-v10 && rm -rf out src/boot res/resources.rs res/resources.d && docker run --rm -v "$PWD:/m68k" -t registry.gitlab.com/doragasu/docker-sgdk:v2.11)
+          cp build/profile-v10/out/rom.bin Maximum_Clonage_Stage1_v1_0_PROFILE.bin
+
+      - name: Source-built BlastEm production QA
+        shell: bash
+        run: |
+          chmod +x ci/blastem_source_smoke.sh
+          ci/blastem_source_smoke.sh "$GITHUB_WORKSPACE/Maximum_Clonage_Stage1_v1_0.bin" "$GITHUB_WORKSPACE/qa-production"
+
+      - name: Source-built BlastEm profiling QA
+        shell: bash
+        run: |
+          chmod +x ci/blastem_source_smoke.sh
+          ci/blastem_source_smoke.sh "$GITHUB_WORKSPACE/Maximum_Clonage_Stage1_v1_0_PROFILE.bin" "$GITHUB_WORKSPACE/qa-profile"
+
+      - name: Upload QA screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maximum-clonage-v1-0-blastem-source-qa
+          path: |
+            qa-production/
+            qa-profile/
+          if-no-files-found: warn
+          retention-days: 7
