@@ -22,7 +22,7 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p build/sgdk
-          cat ci/sgdk_v03_zip/part*.b64 | tr -d '[:space:]' | base64 --decode > build/source.zip
+          cat ci/sgdk_v03_zip/part*.b64 | tr -cd 'A-Za-z0-9+/=' | base64 --decode > build/source.zip
           sha256sum build/source.zip
           echo 'bdae89e085ad8bec73b8d3019e6222de47ea35a7ae96fdd86bdf54a55a721341  build/source.zip' | sha256sum -c -
           unzip -q build/source.zip -d build/sgdk
