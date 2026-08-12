@@ -6,13 +6,14 @@ on:
       - genesis-rom-build
     paths:
       - 'ci/sgdk_v04_zip/**'
+      - 'ci/v05_transform.py'
       - '.github/workflows/genesis-rom.yml'
   workflow_dispatch:
 
 jobs:
   build-rom:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,11 +46,20 @@ jobs:
             ci/sgdk_v04_zip/part07d1.b64 \
             ci/sgdk_v04_zip/part07d2.b64 \
             | tr -cd 'A-Za-z0-9+/=' | base64 --decode > build/source.zip
-          sha256sum build/source.zip
           echo '8e9f5cb0329b2f6a1effa8938d55ce8c64cf591330828aab1b0aff4dff9d2106  build/source.zip' | sha256sum -c -
           unzip -q build/source.zip -d build/sgdk
           chmod -R a+rwX build/sgdk
-          find build/sgdk -maxdepth 3 -type f | sort | head -120
+
+      - name: Transform v0.4 source to v0.5
+        shell: bash
+        run: |
+          set -euxo pipefail
+          PROJECT_DIR="$(find build/sgdk -type f -name Makefile -printf '%h\n' | head -1)"
+          test -n "$PROJECT_DIR"
+          python3 -m pip install --disable-pip-version-check --quiet pillow
+          python3 ci/v05_transform.py "$PROJECT_DIR"
+          grep -n 'v0.5' "$PROJECT_DIR/src/game.c" | head
+          cat "$PROJECT_DIR/res/resources.res"
 
       - name: Build ROM with SGDK 2.11
         shell: bash
@@ -61,7 +71,7 @@ jobs:
           cd "$PROJECT_DIR"
           docker run --rm -v "$PWD:/m68k" -t registry.gitlab.com/doragasu/docker-sgdk:v2.11
           test -s out/rom.bin
-          cp out/rom.bin "$GITHUB_WORKSPACE/Maximum_Clonage_Stage1_v0_4.bin"
+          cp out/rom.bin "$GITHUB_WORKSPACE/Maximum_Clonage_Stage1_v0_5.bin"
 
       - name: Finalize Genesis header and checksum
         shell: bash
@@ -69,7 +79,7 @@ jobs:
           set -euxo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('Maximum_Clonage_Stage1_v0_4.bin')
+          p = Path('Maximum_Clonage_Stage1_v0_5.bin')
           b = bytearray(p.read_bytes())
           if len(b) < 0x200:
               raise SystemExit('ROM too small')
@@ -79,8 +89,8 @@ jobs:
               b[off:off+size] = raw
 
           put(0x110, 16, '(C)MAIDENHEAD26')
-          put(0x120, 48, 'MAXIMUM CLONAGE - STAGE 1 V0.4')
-          put(0x150, 48, 'MAXIMUM CLONAGE - STAGE 1 V0.4')
+          put(0x120, 48, 'MAXIMUM CLONAGE - STAGE 1 V0.5')
+          put(0x150, 48, 'MAXIMUM CLONAGE - STAGE 1 V0.5')
           put(0x180, 14, 'GM 00000000-00')
 
           data = bytes(b[0x200:])
@@ -99,14 +109,14 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import hashlib
-          p = Path('Maximum_Clonage_Stage1_v0_4.bin')
+          p = Path('Maximum_Clonage_Stage1_v0_5.bin')
           b = p.read_bytes()
           if len(b) < 0x200:
               raise SystemExit('ROM too small')
           if not b[0x100:0x110].startswith(b'SEGA'):
               raise SystemExit(f'Missing SEGA header: {b[0x100:0x110]!r}')
           title = b[0x150:0x180].decode('ascii','replace').rstrip()
-          if title != 'MAXIMUM CLONAGE - STAGE 1 V0.4':
+          if title != 'MAXIMUM CLONAGE - STAGE 1 V0.5':
               raise SystemExit(f'Unexpected ROM title: {title!r}')
           stored = int.from_bytes(b[0x18E:0x190], 'big')
           data = b[0x200:]
@@ -123,14 +133,14 @@ jobs:
               raise SystemExit('Genesis checksum mismatch')
           print('SHA256:', hashlib.sha256(b).hexdigest())
           PY
-          sha256sum Maximum_Clonage_Stage1_v0_4.bin > Maximum_Clonage_Stage1_v0_4.sha256
+          sha256sum Maximum_Clonage_Stage1_v0_5.bin > Maximum_Clonage_Stage1_v0_5.sha256
 
       - name: Upload emulator-ready ROM
         uses: actions/upload-artifact@v4
         with:
-          name: maximum-clonage-genesis-rom-v0-4
+          name: maximum-clonage-genesis-rom-v0-5
           path: |
-            Maximum_Clonage_Stage1_v0_4.bin
-            Maximum_Clonage_Stage1_v0_4.sha256
+            Maximum_Clonage_Stage1_v0_5.bin
+            Maximum_Clonage_Stage1_v0_5.sha256
           if-no-files-found: error
           retention-days: 7
