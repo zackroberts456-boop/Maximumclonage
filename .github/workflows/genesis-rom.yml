@@ -7,13 +7,14 @@ on:
     paths:
       - 'ci/sgdk_v04_zip/**'
       - 'ci/v05_transform.py'
+      - 'ci/blastem_smoke.sh'
       - '.github/workflows/genesis-rom.yml'
   workflow_dispatch:
 
 jobs:
   build-rom:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -134,6 +135,23 @@ jobs:
           print('SHA256:', hashlib.sha256(b).hexdigest())
           PY
           sha256sum Maximum_Clonage_Stage1_v0_5.bin > Maximum_Clonage_Stage1_v0_5.sha256
+
+      - name: BlastEm smoke capture
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euxo pipefail
+          chmod +x ci/blastem_smoke.sh
+          ci/blastem_smoke.sh "$GITHUB_WORKSPACE/Maximum_Clonage_Stage1_v0_5.bin" "$GITHUB_WORKSPACE/qa-blastem"
+
+      - name: Upload BlastEm QA capture
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maximum-clonage-v0-5-blastem-qa
+          path: qa-blastem/
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Upload emulator-ready ROM
         uses: actions/upload-artifact@v4
