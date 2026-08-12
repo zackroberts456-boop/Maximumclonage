@@ -37,18 +37,56 @@ jobs:
           python3 - "$PROJECT_DIR" <<'PY'
           from pathlib import Path
           import sys
-          p = Path(sys.argv[1]) / 'res' / 'resources.res'
+          root = Path(sys.argv[1])
+
+          # Normalize resource syntax for SGDK 2.11 / ResComp 3.95.
+          p = root / 'res' / 'resources.res'
           text = p.read_text(encoding='utf-8')
           text = text.encode('ascii', 'replace').decode('ascii')
           text = text.replace('32p 48p', '4 6')
           text = text.replace('64p 64p', '8 8')
           text = text.replace('8p 8p', '1 1')
           p.write_text(text, encoding='ascii')
+
+          # Match the SGDK 2.11 entry-point signature.
+          p = root / 'src' / 'main.c'
+          text = p.read_text(encoding='utf-8')
+          text = text.replace('int main(void)', 'int main(bool hard)')
+          p.write_text(text, encoding='utf-8')
           PY
           cd "$PROJECT_DIR"
           docker run --rm -v "$PWD:/m68k" -t registry.gitlab.com/doragasu/docker-sgdk:v2.11
           test -s out/rom.bin
           cp out/rom.bin "$GITHUB_WORKSPACE/Maximum_Clonage_Stage1_v0_3.bin"
+
+      - name: Finalize Genesis header and checksum
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('Maximum_Clonage_Stage1_v0_3.bin')
+          b = bytearray(p.read_bytes())
+          if len(b) < 0x200:
+              raise SystemExit('ROM too small')
+
+          def put(off, size, text):
+              raw = text.encode('ascii')[:size].ljust(size, b' ')
+              b[off:off+size] = raw
+
+          put(0x110, 16, '(C)MAIDENHEAD26')
+          put(0x120, 48, 'MAXIMUM CLONAGE - STAGE 1 V0.3')
+          put(0x150, 48, 'MAXIMUM CLONAGE - STAGE 1 V0.3')
+          put(0x180, 14, 'GM 00000000-00')
+
+          data = bytes(b[0x200:])
+          if len(data) & 1:
+              data += b'\0'
+          checksum = sum(int.from_bytes(data[i:i+2], 'big') for i in range(0, len(data), 2)) & 0xFFFF
+          b[0x18E:0x190] = checksum.to_bytes(2, 'big')
+          p.write_bytes(b)
+          print(f'Patched Genesis checksum: 0x{checksum:04X}')
+          PY
 
       - name: Verify Genesis ROM structure
         shell: bash
