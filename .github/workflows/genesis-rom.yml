@@ -7,6 +7,7 @@ on:
     paths:
       - 'ci/sgdk_v04_zip/**'
       - 'ci/v05_transform.py'
+      - 'ci/v06_transform.py'
       - 'ci/blastem_smoke.sh'
       - '.github/workflows/genesis-rom.yml'
   workflow_dispatch:
@@ -51,7 +52,7 @@ jobs:
           unzip -q build/source.zip -d build/sgdk
           chmod -R a+rwX build/sgdk
 
-      - name: Transform v0.4 source to v0.5
+      - name: Transform source through v0.6
         shell: bash
         run: |
           set -euxo pipefail
@@ -59,7 +60,9 @@ jobs:
           test -n "$PROJECT_DIR"
           python3 -m pip install --disable-pip-version-check --quiet pillow
           python3 ci/v05_transform.py "$PROJECT_DIR"
-          grep -n 'v0.5' "$PROJECT_DIR/src/game.c" | head
+          python3 ci/v06_transform.py "$PROJECT_DIR"
+          grep -n 'v0.6' "$PROJECT_DIR/src/game.c" | head
+          grep -n 'SPR_VRAM_REQUIRED\|SPR_addSpriteExSafe\|sharedGrunt' "$PROJECT_DIR/src/game.c" | head -20
           cat "$PROJECT_DIR/res/resources.res"
 
       - name: Build ROM with SGDK 2.11
@@ -72,7 +75,7 @@ jobs:
           cd "$PROJECT_DIR"
           docker run --rm -v "$PWD:/m68k" -t registry.gitlab.com/doragasu/docker-sgdk:v2.11
           test -s out/rom.bin
-          cp out/rom.bin "$GITHUB_WORKSPACE/Maximum_Clonage_Stage1_v0_5.bin"
+          cp out/rom.bin "$GITHUB_WORKSPACE/Maximum_Clonage_Stage1_v0_6.bin"
 
       - name: Finalize Genesis header and checksum
         shell: bash
@@ -80,7 +83,7 @@ jobs:
           set -euxo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('Maximum_Clonage_Stage1_v0_5.bin')
+          p = Path('Maximum_Clonage_Stage1_v0_6.bin')
           b = bytearray(p.read_bytes())
           if len(b) < 0x200:
               raise SystemExit('ROM too small')
@@ -90,8 +93,8 @@ jobs:
               b[off:off+size] = raw
 
           put(0x110, 16, '(C)MAIDENHEAD26')
-          put(0x120, 48, 'MAXIMUM CLONAGE - STAGE 1 V0.5')
-          put(0x150, 48, 'MAXIMUM CLONAGE - STAGE 1 V0.5')
+          put(0x120, 48, 'MAXIMUM CLONAGE - STAGE 1 V0.6')
+          put(0x150, 48, 'MAXIMUM CLONAGE - STAGE 1 V0.6')
           put(0x180, 14, 'GM 00000000-00')
 
           data = bytes(b[0x200:])
@@ -110,14 +113,14 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import hashlib
-          p = Path('Maximum_Clonage_Stage1_v0_5.bin')
+          p = Path('Maximum_Clonage_Stage1_v0_6.bin')
           b = p.read_bytes()
           if len(b) < 0x200:
               raise SystemExit('ROM too small')
           if not b[0x100:0x110].startswith(b'SEGA'):
               raise SystemExit(f'Missing SEGA header: {b[0x100:0x110]!r}')
           title = b[0x150:0x180].decode('ascii','replace').rstrip()
-          if title != 'MAXIMUM CLONAGE - STAGE 1 V0.5':
+          if title != 'MAXIMUM CLONAGE - STAGE 1 V0.6':
               raise SystemExit(f'Unexpected ROM title: {title!r}')
           stored = int.from_bytes(b[0x18E:0x190], 'big')
           data = b[0x200:]
@@ -134,7 +137,7 @@ jobs:
               raise SystemExit('Genesis checksum mismatch')
           print('SHA256:', hashlib.sha256(b).hexdigest())
           PY
-          sha256sum Maximum_Clonage_Stage1_v0_5.bin > Maximum_Clonage_Stage1_v0_5.sha256
+          sha256sum Maximum_Clonage_Stage1_v0_6.bin > Maximum_Clonage_Stage1_v0_6.sha256
 
       - name: BlastEm smoke capture
         continue-on-error: true
@@ -142,13 +145,13 @@ jobs:
         run: |
           set -euxo pipefail
           chmod +x ci/blastem_smoke.sh
-          ci/blastem_smoke.sh "$GITHUB_WORKSPACE/Maximum_Clonage_Stage1_v0_5.bin" "$GITHUB_WORKSPACE/qa-blastem"
+          ci/blastem_smoke.sh "$GITHUB_WORKSPACE/Maximum_Clonage_Stage1_v0_6.bin" "$GITHUB_WORKSPACE/qa-blastem"
 
       - name: Upload BlastEm QA capture
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: maximum-clonage-v0-5-blastem-qa
+          name: maximum-clonage-v0-6-blastem-qa
           path: qa-blastem/
           if-no-files-found: warn
           retention-days: 7
@@ -156,9 +159,9 @@ jobs:
       - name: Upload emulator-ready ROM
         uses: actions/upload-artifact@v4
         with:
-          name: maximum-clonage-genesis-rom-v0-5
+          name: maximum-clonage-genesis-rom-v0-6
           path: |
-            Maximum_Clonage_Stage1_v0_5.bin
-            Maximum_Clonage_Stage1_v0_5.sha256
+            Maximum_Clonage_Stage1_v0_6.bin
+            Maximum_Clonage_Stage1_v0_6.sha256
           if-no-files-found: error
           retention-days: 7
