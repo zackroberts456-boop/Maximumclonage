@@ -14,41 +14,46 @@ Persistent Godot 4.7.1 Android master project. Do not restart from scratch. The 
 - 12 HP Normal rules, lives, checkpoints, death/restart, score/combo.
 - Default weapon and Spread pickup foundation.
 - Stage 1 authored traversal with ten encounter rooms and two checkpoints.
-- Clone grunt patrol/chase/retreat/strafe/shoot AI with edge awareness.
+- Three progression-lock combat gates so major encounters cannot be skipped by sprinting past them.
+- Moving vertical/horizontal platforms and instant-death toxic transfer gaps.
+- Clone grunt patrol/chase/retreat/strafe/shoot AI with ledge awareness, procedural gait/recoil feedback and elite variant support.
+- Pixel-safe camera look-ahead that exposes upcoming threats without fractional-pixel shimmer.
 - Android debug APK CI build, verification, and artifact upload.
 
 ## Current Asset / Animation Work
 
 - Player production atlases remain preserved; no source sprites are redrawn.
-- Nada's broken firing frame range (old frames 34-39) is temporarily bypassed because it crosses source-pose boundaries and contains clipped neighboring pixels. Stage runtime now uses clean full-body ready-fire frames until the dedicated production firing strip is normalized.
+- Nada's broken firing frame range (old frames 34-39) is bypassed because it crosses source-pose boundaries and contains clipped neighboring pixels. Stage runtime currently uses clean full-body ready-fire frames until the dedicated production firing strip is wired into the repository.
+- Player sprites are displayed slightly larger on the 240x160 viewport so more authored detail remains legible on phones while retaining the standardized gameplay hitbox.
 - Clone grunt production art is shown closer to native resolution. Full enemy sheet normalization into true walk/fire/hit/death frame strips remains a priority.
 
-## Current Level Design Goals
+## Stage 1 Current Flow
 
-Stage 1 is being treated as the vertical-slice quality bar. Current authored flow:
+Stage 1 is the vertical-slice quality bar. Current authored flow:
 
 1. Safe movement / firing runway.
 2. First readable pit with optional high route.
-3. Crossfire bay with staggered elevations.
-4. First checkpoint and bridge-choice jump.
-5. Staircase chamber teaching vertical target priority.
-6. Two short transfer gaps with recovery platforms.
-7. Second checkpoint and pressure arena.
-8. Moving crossfire plus commitment jump.
-9. Pre-exit enemy gauntlet without pit pressure.
-10. Decompression / exit approach.
+3. Crossfire lockdown: two staggered-height enemies must be cleared to open the sector gate.
+4. First checkpoint and recovery jump.
+5. Vertical-priority chamber with a timed lift rather than static staircase spam.
+6. Toxic transfer line with two lethal gaps and a moving bridge route.
+7. Second checkpoint and pressure-lock arena.
+8. Wide toxic trench with moving platform and upper skill route.
+9. Final mobile-enemy gauntlet without pit pressure.
+10. Elite kill-floor clearance; exit remains sealed until the elite enemy is defeated.
 
 ## Known Issues / Next Priorities
 
-1. Normalize full enemy production sprite sheets into transparent, consistently anchored animation frames.
-2. Normalize dedicated player firing/aiming strips, starting with Nada, without clipping or pose-boundary contamination.
+1. Normalize full enemy production sprite sheets into transparent, consistently anchored walk/fire/hit/death animation strips.
+2. Wire the dedicated clean Nada firing strip into the persistent repository asset pipeline.
 3. Replace foundation environment placeholders with production tiles / props assembled from the clean source asset library.
-4. Add more enemy archetypes and encounter behaviors so Stage 1 is not clone-grunt-only.
-5. Add the Stage 1 miniboss/boss and boss arena.
+4. Add Acid Spitter as the second true enemy archetype with arc projectiles / puddle hazard behavior.
+5. Add the dedicated Killing Floor Rotor Stage 1 boss with three readable phases and boss HUD.
 6. Implement ladder traversal using the supplied ladder artwork.
-7. Continue mobile HUD/control polish based on device testing.
-8. Build repeatable visual regression / gameplay capture tests before declaring any stage production-ready.
-9. Add soundtrack later; audio system remains intentionally soundtrack-agnostic until the MIDI Maximum Clonage arrangements are ready.
+7. Add enemy respawn rules / checkpoint reset behavior matching the master rules.
+8. Continue mobile HUD/control polish based on device testing.
+9. Build repeatable visual regression / gameplay capture tests before declaring any stage production-ready.
+10. Add soundtrack later; audio system remains soundtrack-agnostic until the MIDI Maximum Clonage arrangements are ready.
 
 ## Quality Rule
 
