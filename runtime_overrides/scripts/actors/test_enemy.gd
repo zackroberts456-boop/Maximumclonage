@@ -11,6 +11,7 @@ const ACTIVATION_RANGE = 220.0
 const SHOOT_MIN_RANGE = 66.0
 const SHOOT_MAX_RANGE = 142.0
 const RETREAT_RANGE = 42.0
+const SPRITE_REST_Y = -31.0
 
 var spawn_x = 0.0
 var patrol_direction = -1
@@ -26,7 +27,7 @@ var current_state = "patrol"
 var walk_phase = 0.0
 var recoil_left = 0.0
 var elite = false
-var base_sprite_scale = 0.72
+var base_sprite_scale = 0.30
 
 func make_elite():
     elite = true
@@ -46,7 +47,7 @@ func _ready():
         speed *= 1.12
         fire_interval *= 0.72
         projectile_speed *= 1.08
-        base_sprite_scale = 0.79
+        base_sprite_scale = 0.33
 
     var collider = CollisionShape2D.new()
     var shape = RectangleShape2D.new()
@@ -55,14 +56,13 @@ func _ready():
     collider.position = Vector2(0, -3)
     add_child(collider)
 
-    # Keep the existing production grunt art near native presentation scale.
-    # The dedicated walk/fire strips can replace this visual layer later without
-    # changing any AI or collision behavior.
+    # High-detail production grunt artwork. Gameplay collision stays identical to the
+    # stable build; only the visual layer changes, so platforming/enemy balance does not.
     sprite = Sprite2D.new()
-    sprite.texture = load("res://assets/enemies/clone_grunt_idle.png")
+    sprite.texture = load("res://assets/enemies/clone_grunt_production.png")
     sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
     sprite.scale = Vector2(base_sprite_scale, base_sprite_scale)
-    sprite.position = Vector2(0, -19)
+    sprite.position = Vector2(0, SPRITE_REST_Y)
     if elite:
         sprite.modulate = Color(1.0, 0.83, 0.58, 1.0)
     add_child(sprite)
@@ -156,19 +156,19 @@ func _update_visual_motion(delta):
     if moving:
         walk_phase += delta * (12.0 + abs(velocity.x) * 0.035)
         var step = sin(walk_phase)
-        sprite.position.y = -19.0 + step * 1.45
-        sprite.rotation = step * 0.015
-        var squash = step * 0.012
+        sprite.position.y = SPRITE_REST_Y + step * 1.25
+        sprite.rotation = step * 0.012
+        var squash = step * 0.006
         sprite.scale = Vector2(base_sprite_scale + squash, base_sprite_scale - squash)
         sprite.flip_h = velocity.x < 0.0
     else:
-        sprite.position.y = lerp(sprite.position.y, -19.0, min(1.0, delta * 14.0))
+        sprite.position.y = lerp(sprite.position.y, SPRITE_REST_Y, min(1.0, delta * 14.0))
         sprite.rotation = lerp(sprite.rotation, 0.0, min(1.0, delta * 14.0))
         sprite.scale = sprite.scale.lerp(Vector2(base_sprite_scale, base_sprite_scale), min(1.0, delta * 14.0))
 
     if recoil_left > 0.0:
         var recoil_dir = 1.0 if sprite.flip_h else -1.0
-        sprite.position.x = recoil_dir * 2.0
+        sprite.position.x = recoil_dir * 1.5
     else:
         sprite.position.x = lerp(sprite.position.x, 0.0, min(1.0, delta * 18.0))
 
