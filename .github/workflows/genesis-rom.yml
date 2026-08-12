@@ -22,7 +22,29 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p build/sgdk
-          cat ci/sgdk_v04_zip/part*.b64 | tr -cd 'A-Za-z0-9+/=' | base64 --decode > build/source.zip
+          cat \
+            ci/sgdk_v04_zip/part00.b64 \
+            ci/sgdk_v04_zip/part01.b64 \
+            ci/sgdk_v04_zip/part02.b64 \
+            ci/sgdk_v04_zip/part03.b64 \
+            ci/sgdk_v04_zip/part04.b64 \
+            ci/sgdk_v04_zip/part05.b64 \
+            ci/sgdk_v04_zip/part06a.b64 \
+            ci/sgdk_v04_zip/part06b.b64 \
+            ci/sgdk_v04_zip/part06c.b64 \
+            ci/sgdk_v04_zip/part06d.b64 \
+            ci/sgdk_v04_zip/part06e.b64 \
+            ci/sgdk_v04_zip/part06f.b64 \
+            ci/sgdk_v04_zip/part07a.b64 \
+            ci/sgdk_v04_zip/part07b.b64 \
+            ci/sgdk_v04_zip/part07c0.b64 \
+            ci/sgdk_v04_zip/part07c1.b64 \
+            ci/sgdk_v04_zip/part07c2.b64 \
+            ci/sgdk_v04_zip/part07c3.b64 \
+            ci/sgdk_v04_zip/part07d0.b64 \
+            ci/sgdk_v04_zip/part07d1.b64 \
+            ci/sgdk_v04_zip/part07d2.b64 \
+            | tr -cd 'A-Za-z0-9+/=' | base64 --decode > build/source.zip
           sha256sum build/source.zip
           echo '8e9f5cb0329b2f6a1effa8938d55ce8c64cf591330828aab1b0aff4dff9d2106  build/source.zip' | sha256sum -c -
           unzip -q build/source.zip -d build/sgdk
