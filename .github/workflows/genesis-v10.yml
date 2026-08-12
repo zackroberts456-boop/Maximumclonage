@@ -6,6 +6,7 @@ on:
     paths:
       - 'ci/v10_transform.py'
       - 'ci/v06_profile_patch.py'
+      - 'ci/mednafen_smoke.sh'
       - '.github/workflows/genesis-v10.yml'
   workflow_dispatch:
 
@@ -46,7 +47,7 @@ jobs:
           python3 ci/v10_transform.py "$PROJECT_DIR"
           chmod -R a+rwX "$PROJECT_DIR"
           echo "$PROJECT_DIR" > build/project_dir.txt
-          grep -n 'v1.0\|fgVisualCache\|demand' "$PROJECT_DIR/src/game.c" | head -30
+          grep -n 'v1.0\|fgVisualCache\|needGrunt' "$PROJECT_DIR/src/game.c" | head -30
 
       - name: Build production ROM with SGDK 2.11
         shell: bash
@@ -85,6 +86,15 @@ jobs:
           PY
           sha256sum Maximum_Clonage_Stage1_v1_0.bin > Maximum_Clonage_Stage1_v1_0.sha256
 
+      - name: Upload verified ROM immediately
+        uses: actions/upload-artifact@v4
+        with:
+          name: maximum-clonage-genesis-rom-v1-0
+          path: |
+            Maximum_Clonage_Stage1_v1_0.bin
+            Maximum_Clonage_Stage1_v1_0.sha256
+          retention-days: 7
+
       - name: Build rolling-load profiler ROM
         shell: bash
         run: |
@@ -96,49 +106,49 @@ jobs:
           cd "$PROFILE_DIR"
           rm -rf out src/boot res/resources.rs res/resources.d
           docker run --rm -v "$PWD:/m68k" -t registry.gitlab.com/doragasu/docker-sgdk:v2.11
+          test -s out/rom.bin
           cp out/rom.bin "$GITHUB_WORKSPACE/Maximum_Clonage_Stage1_v1_0_PROFILE.bin"
 
-      - name: BlastEm production smoke
+      - name: Mednafen production smoke
         continue-on-error: true
-        run: |
-          chmod +x ci/blastem_smoke.sh
-          ci/blastem_smoke.sh "$GITHUB_WORKSPACE/Maximum_Clonage_Stage1_v1_0.bin" "$GITHUB_WORKSPACE/qa-production"
-
-      - name: BlastEm profiling smoke
-        continue-on-error: true
-        run: |
-          chmod +x ci/blastem_smoke.sh
-          ci/blastem_smoke.sh "$GITHUB_WORKSPACE/Maximum_Clonage_Stage1_v1_0_PROFILE.bin" "$GITHUB_WORKSPACE/qa-profile"
-
-      - name: Package transformed source
         shell: bash
         run: |
-          PROJECT_DIR="$(cat build/project_dir.txt)"
-          rm -rf "$PROJECT_DIR/out" "$PROJECT_DIR/src/boot" "$PROJECT_DIR/res/resources.rs" "$PROJECT_DIR/res/resources.d"
-          (cd "$(dirname "$PROJECT_DIR")" && zip -qr "$GITHUB_WORKSPACE/Maximum_Clonage_SGDK_Stage1_v1_0_Source.zip" "$(basename "$PROJECT_DIR")")
+          chmod +x ci/mednafen_smoke.sh
+          ci/mednafen_smoke.sh "$GITHUB_WORKSPACE/Maximum_Clonage_Stage1_v1_0.bin" "$GITHUB_WORKSPACE/qa-production"
 
-      - name: Upload QA
+      - name: Mednafen profiling smoke
+        continue-on-error: true
+        shell: bash
+        run: |
+          chmod +x ci/mednafen_smoke.sh
+          ci/mednafen_smoke.sh "$GITHUB_WORKSPACE/Maximum_Clonage_Stage1_v1_0_PROFILE.bin" "$GITHUB_WORKSPACE/qa-profile"
+
+      - name: Upload Mednafen QA
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: maximum-clonage-v1-0-blastem-qa
+          name: maximum-clonage-v1-0-mednafen-qa
           path: |
             qa-production/
             qa-profile/
+          if-no-files-found: warn
           retention-days: 7
 
-      - name: Upload ROM
-        uses: actions/upload-artifact@v4
-        with:
-          name: maximum-clonage-genesis-rom-v1-0
-          path: |
-            Maximum_Clonage_Stage1_v1_0.bin
-            Maximum_Clonage_Stage1_v1_0.sha256
-          retention-days: 7
+      - name: Package transformed source
+        if: always()
+        shell: bash
+        run: |
+          set -euxo pipefail
+          PROJECT_DIR="$(cat build/project_dir.txt)"
+          sudo chown -R "$(id -u):$(id -g)" "$PROJECT_DIR"
+          rm -rf "$PROJECT_DIR/out" "$PROJECT_DIR/src/boot" "$PROJECT_DIR/res/resources.rs" "$PROJECT_DIR/res/resources.d"
+          (cd "$(dirname "$PROJECT_DIR")" && zip -qr "$GITHUB_WORKSPACE/Maximum_Clonage_SGDK_Stage1_v1_0_Source.zip" "$(basename "$PROJECT_DIR")")
 
       - name: Upload source
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: maximum-clonage-genesis-source-v1-0
           path: Maximum_Clonage_SGDK_Stage1_v1_0_Source.zip
+          if-no-files-found: warn
           retention-days: 7
