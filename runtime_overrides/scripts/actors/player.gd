@@ -21,6 +21,7 @@ var sprite
 var health
 var weapons
 var camera
+var camera_target_offset = Vector2.ZERO
 
 func setup(selected_id):
     character_id = selected_id
@@ -43,7 +44,9 @@ func _ready():
     sprite = AnimatedSprite2D.new()
     sprite.name = "Sprite"
     sprite.position = Vector2(0, -18)
-    sprite.scale = Vector2(0.5, 0.5)
+    # The source atlases were being displayed unnecessarily small on phones.
+    # This still fits the standardized hitbox but keeps more of the authored pixel detail visible.
+    sprite.scale = Vector2(0.54, 0.54)
     sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
     sprite.sprite_frames = _build_sprite_frames(load(character_data["atlas"]))
     add_child(sprite)
@@ -63,6 +66,7 @@ func _ready():
 
     camera = Camera2D.new()
     camera.name = "Camera"
+    # Camera coordinates are rounded every frame to keep the 240x160 viewport pixel-stable.
     camera.position_smoothing_enabled = false
     camera.limit_left = 0
     camera.limit_top = 0
@@ -75,6 +79,7 @@ func _physics_process(delta):
     if dead:
         velocity.y += GameRules.GRAVITY * delta
         move_and_slide()
+        _update_camera(delta)
         return
 
     var move_input = InputRouter.get_move_vector()
@@ -116,6 +121,7 @@ func _physics_process(delta):
 
     _update_animation(move_input)
     _update_invulnerability_visual()
+    _update_camera(delta)
     if GameState.debug_collision_visible:
         queue_redraw()
 
@@ -153,6 +159,18 @@ func _get_valid_aim(move_input):
         return Vector2.ZERO
     return result.normalized()
 
+func _update_camera(delta):
+    if camera == null:
+        return
+    var look_x = float(facing) * 24.0
+    if InputRouter.is_action_pressed_mc("fire") and abs(aim_direction.x) > 0.1:
+        look_x = aim_direction.x * 30.0
+    var look_y = -8.0 if aim_direction.y < -0.2 else (8.0 if aim_direction.y > 0.2 and not is_on_floor() else 0.0)
+    camera_target_offset = Vector2(look_x, look_y)
+    var blend = min(1.0, delta * 7.5)
+    var next_position = camera.position.lerp(camera_target_offset, blend)
+    camera.position = Vector2(round(next_position.x), round(next_position.y))
+
 func _update_animation(move_input):
     var desired = "idle"
     if not is_on_floor():
@@ -177,9 +195,9 @@ func _build_sprite_frames(texture):
     _add_animation(frames, texture, "idle", [0, 1, 2, 3, 4, 5], 7.0, true)
     _add_animation(frames, texture, "run", [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19], 13.0, true)
 
-    # Nada's old 34-39 range crosses pose boundaries in the source atlas; frames
-    # 35-37 contain clipped/stray pixels from neighboring art. Use the clean,
-    # full-height ready-fire sequence until the dedicated firing strip is normalized.
+    # Nada's original firing range crosses source-pose boundaries. These clean
+    # full-height ready-fire frames prevent the clipped fragment that was appearing
+    # behind her until the dedicated production firing strip is wired into the repo.
     if character_id == "nada":
         _add_animation(frames, texture, "shoot", [24, 25, 26, 27, 28, 29], 10.0, true)
     else:
