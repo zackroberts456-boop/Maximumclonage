@@ -21,9 +21,12 @@ func _initialize():
         "res://scenes/stage1_killing_floor.tscn",
         "res://scenes/test_room.tscn",
         "res://scripts/actors/player.gd",
+        "res://scripts/actors/player_v06.gd",
         "res://scripts/actors/test_enemy.gd",
         "res://scripts/actors/killing_floor_rotor.gd",
+        "res://scripts/world/ladder.gd",
         "res://scripts/scenes/stage1_killing_floor.gd",
+        "res://scripts/scenes/stage1_killing_floor_v06.gd",
         "res://scripts/ui/hud.gd",
         "res://scripts/ui/touch_controls.gd",
         "res://assets/bosses/killing_floor_rotor.png"
