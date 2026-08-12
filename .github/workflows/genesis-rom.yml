@@ -48,6 +48,7 @@ jobs:
           sha256sum build/source.zip
           echo '8e9f5cb0329b2f6a1effa8938d55ce8c64cf591330828aab1b0aff4dff9d2106  build/source.zip' | sha256sum -c -
           unzip -q build/source.zip -d build/sgdk
+          chmod -R a+rwX build/sgdk
           find build/sgdk -maxdepth 3 -type f | sort | head -120
 
       - name: Build ROM with SGDK 2.11
@@ -56,6 +57,7 @@ jobs:
           set -euxo pipefail
           PROJECT_DIR="$(find build/sgdk -type f -name Makefile -printf '%h\n' | head -1)"
           test -n "$PROJECT_DIR"
+          chmod -R a+rwX "$PROJECT_DIR"
           cd "$PROJECT_DIR"
           docker run --rm -v "$PWD:/m68k" -t registry.gitlab.com/doragasu/docker-sgdk:v2.11
           test -s out/rom.bin
