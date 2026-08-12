@@ -3,11 +3,11 @@ extends Control
 const DPAD_CENTER = Vector2(39, 120)
 const DPAD_TOUCH_RADIUS = 43.0
 const DPAD_DEAD_ZONE = 8.0
-const DPAD_VISUAL_OFFSET = 17.0
+const DPAD_VISUAL_OFFSET = 16.5
 const BUTTONS = {
-    "fire": {"center": Vector2(213, 120), "touch_radius": 25.0, "visual_radius": 16.0, "label": "FIRE"},
-    "jump": {"center": Vector2(176, 132), "touch_radius": 24.0, "visual_radius": 15.0, "label": "JUMP"},
-    "special": {"center": Vector2(207, 82), "touch_radius": 22.0, "visual_radius": 13.0, "label": "SP"}
+    "fire": {"center": Vector2(213, 120), "touch_radius": 25.0, "visual_radius": 15.5, "label": "FIRE"},
+    "jump": {"center": Vector2(176, 132), "touch_radius": 24.0, "visual_radius": 14.5, "label": "JUMP"},
+    "special": {"center": Vector2(207, 82), "touch_radius": 22.0, "visual_radius": 12.5, "label": "SP"}
 }
 
 var active_touches = {}
@@ -108,14 +108,16 @@ func _draw():
 
 func _draw_dpad():
     var active = pressed_dpad_direction != Vector2.ZERO
-    var base_alpha = 0.18 if not active else 0.29
-    var edge_alpha = 0.34 if not active else 0.56
-    var plate = Color(0.04, 0.07, 0.06, base_alpha)
-    var edge = Color(0.78, 0.94, 0.86, edge_alpha)
-    var glow = Color(0.45, 1.0, 0.30, 0.26 if active else 0.08)
+    var idle_fill = 0.10
+    var active_fill = 0.32
+    var idle_edge = 0.20
 
-    draw_circle(DPAD_CENTER, 11.0, plate, true, -1.0, true)
-    draw_circle(DPAD_CENTER, 11.0, edge, false, 1.0, true)
+    # One faint outer guide makes the pad read as a single control rather than four
+    # opaque bubbles while keeping most of the playfield visible underneath it.
+    draw_circle(DPAD_CENTER, 31.5, Color(0.03, 0.06, 0.055, 0.055 if not active else 0.09), true, -1.0, true)
+    draw_circle(DPAD_CENTER, 31.5, Color(0.78, 0.94, 0.86, 0.13 if not active else 0.24), false, 1.0, true)
+    draw_circle(DPAD_CENTER, 8.0, Color(0.04, 0.07, 0.065, 0.13 if not active else 0.24), true, -1.0, true)
+    draw_circle(DPAD_CENTER, 8.0, Color(0.82, 0.96, 0.88, 0.19 if not active else 0.38), false, 1.0, true)
 
     var dirs = {
         "up": Vector2(0, -1),
@@ -127,13 +129,13 @@ func _draw_dpad():
         var dir = dirs[key]
         var center = DPAD_CENTER + dir * DPAD_VISUAL_OFFSET
         var is_pressed = _direction_matches(dir)
-        var local_plate = Color(0.05, 0.08, 0.07, 0.44 if is_pressed else base_alpha)
-        var local_edge = Color(0.55, 1.0, 0.34, 0.74) if is_pressed else edge
-        draw_circle(center, 12.5, local_plate, true, -1.0, true)
-        draw_circle(center, 12.5, local_edge, false, 1.0, true)
+        var local_plate = Color(0.04, 0.075, 0.065, active_fill if is_pressed else idle_fill)
+        var local_edge = Color(0.55, 1.0, 0.34, 0.70) if is_pressed else Color(0.84, 0.96, 0.89, idle_edge)
+        draw_circle(center, 10.5, local_plate, true, -1.0, true)
+        draw_circle(center, 10.5, local_edge, false, 1.0, true)
         if is_pressed:
-            draw_circle(center, 8.5, glow, true, -1.0, true)
-        _draw_arrow(center, dir, Color(0.92, 1.0, 0.94, 0.76 if is_pressed else 0.48))
+            draw_circle(center, 7.0, Color(0.43, 1.0, 0.29, 0.18), true, -1.0, true)
+        _draw_arrow(center, dir, Color(0.94, 1.0, 0.96, 0.82 if is_pressed else 0.46))
 
 func _direction_matches(cardinal: Vector2):
     if cardinal.x != 0.0:
@@ -143,8 +145,8 @@ func _direction_matches(cardinal: Vector2):
     return false
 
 func _draw_arrow(center: Vector2, dir: Vector2, color: Color):
-    var forward = dir * 5.0
-    var side = Vector2(-dir.y, dir.x) * 3.0
+    var forward = dir * 4.4
+    var side = Vector2(-dir.y, dir.x) * 2.7
     draw_polygon(PackedVector2Array([
         center + forward,
         center - forward * 0.55 + side,
@@ -156,13 +158,15 @@ func _draw_action_button(action_name: String):
     var center = data["center"]
     var radius = float(data["visual_radius"])
     var pressed = InputRouter.is_action_pressed_mc(action_name)
-    var fill = Color(0.04, 0.07, 0.06, 0.46 if pressed else 0.18)
-    var edge = Color(0.55, 1.0, 0.34, 0.80) if pressed else Color(0.82, 0.94, 0.88, 0.36)
-    var inner = Color(0.42, 1.0, 0.26, 0.24 if pressed else 0.06)
+    var fill = Color(0.035, 0.065, 0.058, 0.34 if pressed else 0.095)
+    var edge = Color(0.55, 1.0, 0.34, 0.72) if pressed else Color(0.84, 0.95, 0.89, 0.22)
+    var inner = Color(0.42, 1.0, 0.26, 0.16 if pressed else 0.035)
 
+    # Double-ring glass treatment: touch targets remain large, visuals stay light.
     draw_circle(center, radius, fill, true, -1.0, true)
     draw_circle(center, radius, edge, false, 1.0, true)
     draw_circle(center, radius - 3.0, inner, true, -1.0, true)
+    draw_circle(center, radius - 3.0, Color(0.94, 1.0, 0.96, 0.12 if pressed else 0.07), false, 1.0, true)
 
     var label = str(data["label"])
     var font_size = 5 if label.length() > 2 else 6
@@ -173,5 +177,5 @@ func _draw_action_button(action_name: String):
         HORIZONTAL_ALIGNMENT_CENTER,
         radius * 2.0,
         font_size,
-        Color(0.96, 1.0, 0.97, 0.90)
+        Color(0.97, 1.0, 0.98, 0.90 if pressed else 0.66)
     )
