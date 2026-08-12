@@ -1,0 +1,80 @@
+name: Build Maximum Clonage Genesis ROM
+
+on:
+  push:
+    branches:
+      - genesis-rom-build
+    paths:
+      - 'ci/sgdk_v03_zip/**'
+      - '.github/workflows/genesis-rom.yml'
+  workflow_dispatch:
+
+jobs:
+  build-rom:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reassemble SGDK source package
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p build/sgdk
+          cat ci/sgdk_v03_zip/part*.b64 | tr -d '[:space:]' | base64 --decode > build/source.zip
+          sha256sum build/source.zip
+          echo 'bdae89e085ad8bec73b8d3019e6222de47ea35a7ae96fdd86bdf54a55a721341  build/source.zip' | sha256sum -c -
+          unzip -q build/source.zip -d build/sgdk
+          find build/sgdk -maxdepth 3 -type f | sort | head -100
+
+      - name: Build ROM with SGDK 2.11
+        shell: bash
+        run: |
+          set -euxo pipefail
+          PROJECT_DIR="$(find build/sgdk -type f -name Makefile -printf '%h\n' | head -1)"
+          test -n "$PROJECT_DIR"
+          cd "$PROJECT_DIR"
+          docker run --rm -v "$PWD:/m68k" -t registry.gitlab.com/doragasu/docker-sgdk:v2.11
+          test -s out/rom.bin
+          cp out/rom.bin "$GITHUB_WORKSPACE/Maximum_Clonage_Stage1_v0_3.bin"
+
+      - name: Verify Genesis ROM structure
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          p = Path('Maximum_Clonage_Stage1_v0_3.bin')
+          b = p.read_bytes()
+          if len(b) < 0x200:
+              raise SystemExit('ROM too small')
+          if not b[0x100:0x110].startswith(b'SEGA'):
+              raise SystemExit(f'Missing SEGA header: {b[0x100:0x110]!r}')
+          stored = int.from_bytes(b[0x18E:0x190], 'big')
+          data = b[0x200:]
+          if len(data) & 1:
+              data += b'\0'
+          calc = sum(int.from_bytes(data[i:i+2], 'big') for i in range(0, len(data), 2)) & 0xFFFF
+          print('ROM bytes:', len(b))
+          print('SEGA header:', b[0x100:0x110])
+          print('Domestic title:', b[0x120:0x150].decode('ascii','replace').rstrip())
+          print('International title:', b[0x150:0x180].decode('ascii','replace').rstrip())
+          print(f'Header checksum: 0x{stored:04X}')
+          print(f'Calculated checksum: 0x{calc:04X}')
+          if stored != calc:
+              raise SystemExit('Genesis checksum mismatch')
+          print('SHA256:', hashlib.sha256(b).hexdigest())
+          PY
+          sha256sum Maximum_Clonage_Stage1_v0_3.bin > Maximum_Clonage_Stage1_v0_3.sha256
+
+      - name: Upload emulator-ready ROM
+        uses: actions/upload-artifact@v4
+        with:
+          name: maximum-clonage-genesis-rom-v0-3
+          path: |
+            Maximum_Clonage_Stage1_v0_3.bin
+            Maximum_Clonage_Stage1_v0_3.sha256
+          if-no-files-found: error
+          retention-days: 7
