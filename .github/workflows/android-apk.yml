@@ -11,7 +11,7 @@ env:
   GODOT_VERSION: 4.7.1
   ANDROID_HOME: ${{ github.workspace }}/.android-sdk
   ANDROID_SDK_ROOT: ${{ github.workspace }}/.android-sdk
-  PROJECT_DIR: ${{ runner.temp }}/maximum-clonage-project
+  PROJECT_DIR: ${{ github.workspace }}/.runtime-project
 
 jobs:
   build-android:
