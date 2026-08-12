@@ -2,6 +2,7 @@ extends Node2D
 
 const Player = preload("res://scripts/actors/player.gd")
 const TestEnemy = preload("res://scripts/actors/test_enemy.gd")
+const KillingFloorRotor = preload("res://scripts/actors/killing_floor_rotor.gd")
 const Checkpoint = preload("res://scripts/world/checkpoint.gd")
 const WeaponPickup = preload("res://scripts/world/weapon_pickup.gd")
 const Hud = preload("res://scripts/ui/hud.gd")
@@ -9,10 +10,14 @@ const DebugOverlay = preload("res://scripts/ui/debug_overlay.gd")
 const TouchControls = preload("res://scripts/ui/touch_controls.gd")
 
 const STAGE_ID = "stage_01_killing_floor"
-const STAGE_LENGTH = 2400.0
+const STAGE_LENGTH = 2880.0
 const TILE_SIZE = 16
+const FLOOR_Y = 136.0
+const BOSS_ARENA_START = 2640.0
+const BOSS_TRIGGER_X = 2670.0
 
 var player
+var boss
 var message_label
 var handling_death = false
 var stage_complete = false
@@ -20,6 +25,13 @@ var tile_texture
 var background_texture
 var wave_counts = {1: 0, 2: 0, 3: 0}
 var gates = {}
+var boss_active = false
+var boss_defeated = false
+var boss_left_gate
+var boss_right_gate
+var boss_hud_root
+var boss_bar_fill
+var boss_bar_label
 
 func _ready():
     tile_texture = load("res://assets/environment/lab_tiles_16.png")
@@ -34,27 +46,31 @@ func _ready():
 func _process(_delta):
     if stage_complete or player == null:
         return
-    if player.global_position.x >= STAGE_LENGTH - 52.0 and int(wave_counts[3]) <= 0:
+
+    if not boss_active and not boss_defeated and player.global_position.x >= BOSS_TRIGGER_X:
+        _activate_boss_encounter()
+
+    if boss_defeated and player.global_position.x >= STAGE_LENGTH - 48.0:
         _complete_stage_slice()
 
 func _build_background():
     var panel_count = int(ceil(STAGE_LENGTH / 240.0))
     for i in range(panel_count):
-        var sprite = Sprite2D.new()
-        sprite.texture = background_texture
-        sprite.centered = false
-        sprite.position = Vector2(i * 240, 0)
-        sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-        sprite.z_index = -30
-        var brightness = 0.70 + float(i % 3) * 0.055
-        sprite.modulate = Color(brightness, brightness + 0.04, brightness, 1.0)
-        add_child(sprite)
+        var panel = Sprite2D.new()
+        panel.texture = background_texture
+        panel.centered = false
+        panel.position = Vector2(i * 240, 0)
+        panel.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+        panel.z_index = -30
+        var brightness = 0.69 + float(i % 3) * 0.05
+        panel.modulate = Color(brightness, brightness + 0.045, brightness, 1.0)
+        add_child(panel)
 
         if i > 0:
             var seam = Line2D.new()
             seam.points = PackedVector2Array([Vector2(i * 240, 18), Vector2(i * 240, 136)])
             seam.width = 2.0
-            seam.default_color = Color(0.20, 0.55, 0.28, 0.22)
+            seam.default_color = Color(0.20, 0.55, 0.28, 0.18)
             seam.z_index = -20
             add_child(seam)
 
@@ -67,91 +83,125 @@ func _build_background():
     shadow.z_index = -28
     add_child(shadow)
 
-    for x in [228.0, 468.0, 708.0, 948.0, 1188.0, 1428.0, 1668.0, 1908.0, 2148.0, 2388.0]:
+    # Room dividers and low-intensity light columns help visual geometry line up with gameplay rooms.
+    for x in range(228, int(STAGE_LENGTH), 240):
         var glow = Polygon2D.new()
         glow.polygon = PackedVector2Array([
-            Vector2(x, 24), Vector2(x + 4, 24), Vector2(x + 4, 134), Vector2(x, 134)
+            Vector2(float(x), 24), Vector2(float(x + 4), 24),
+            Vector2(float(x + 4), 134), Vector2(float(x), 134)
         ])
-        glow.color = Color(0.25, 1.0, 0.18, 0.09)
+        glow.color = Color(0.25, 1.0, 0.18, 0.08)
         glow.z_index = -24
         add_child(glow)
 
-    _add_world_label(Vector2(18, 42), "SECTOR A // ENTRY LINE", Color(0.55, 1.0, 0.32, 0.48))
-    _add_world_label(Vector2(492, 42), "SECTOR B // CROSSFIRE BAY", Color(0.55, 1.0, 0.32, 0.44))
-    _add_world_label(Vector2(982, 42), "SECTOR C // TRANSFER SHAFT", Color(0.55, 1.0, 0.32, 0.44))
-    _add_world_label(Vector2(1450, 42), "SECTOR D // PURGE LINE", Color(1.0, 0.72, 0.22, 0.46))
-    _add_world_label(Vector2(1940, 42), "SECTOR E // KILL FLOOR", Color(1.0, 0.55, 0.20, 0.50))
+    _add_world_label(Vector2(18, 42), "SECTOR A // ENTRY", Color(0.55, 1.0, 0.32, 0.48))
+    _add_world_label(Vector2(500, 42), "SECTOR B // CROSSFIRE", Color(0.55, 1.0, 0.32, 0.44))
+    _add_world_label(Vector2(982, 42), "SECTOR C // LIFT SHAFT", Color(0.55, 1.0, 0.32, 0.44))
+    _add_world_label(Vector2(1460, 42), "SECTOR D // PURGE LINE", Color(1.0, 0.72, 0.22, 0.46))
+    _add_world_label(Vector2(1944, 42), "SECTOR E // KILL FLOOR", Color(1.0, 0.55, 0.20, 0.50))
+    _add_world_label(Vector2(2420, 42), "SECTOR F // ROTOR CORE", Color(1.0, 0.38, 0.18, 0.56))
 
 func _build_geometry():
-    # ROOM 1: movement/shooting runway with one safe elevated target line.
+    # Platforming metrics are authored around the canonical movement envelope:
+    # ~58 px full-jump rise and ~80 px practical horizontal reach on Normal.
+    # Mandatory gaps stay mostly 32-48 px; 56+ px routes are optional or assisted.
+
+    # ROOM 1 (0-240): safe movement runway + one elevated route.
     _add_solid_rect(Rect2(0, 136, 240, 24), 0, false)
-    _add_solid_rect(Rect2(144, 108, 72, 16), 1, false)
+    _add_solid_rect(Rect2(128, 108, 64, 16), 1, false)
 
-    # ROOM 2: one clean commitment jump with optional upper recovery route.
-    _add_solid_rect(Rect2(240, 136, 80, 24), 0, false)
-    _add_solid_rect(Rect2(352, 136, 128, 24), 0, false)
-    _add_solid_rect(Rect2(270, 106, 72, 16), 1, false)
-    _add_solid_rect(Rect2(372, 98, 76, 16), 1, false)
-    _add_instant_hazard(Rect2(320, 150, 32, 12))
+    # ROOM 2 (240-480): first real jump. A 48px toxic gap has a narrow recovery brace.
+    _add_solid_rect(Rect2(240, 136, 72, 24), 0, true)
+    _add_solid_rect(Rect2(360, 136, 120, 24), 0, true)
+    _add_solid_rect(Rect2(320, 124, 32, 12), 1, true)
+    _add_solid_rect(Rect2(270, 102, 56, 16), 1, false)
+    _add_solid_rect(Rect2(384, 94, 72, 16), 1, false)
+    _add_instant_hazard(Rect2(312, 148, 48, 18))
 
-    # ROOM 3: LOCKDOWN CROSSFIRE. The exit gate opens only when both guards die.
+    # ROOM 3 (480-720): LOCKDOWN CROSSFIRE. Combat first, platforming second.
     _add_solid_rect(Rect2(480, 136, 240, 24), 0, false)
-    _add_solid_rect(Rect2(516, 110, 76, 16), 1, false)
-    _add_solid_rect(Rect2(620, 90, 84, 16), 1, false)
-    _add_cover_post(604, 112, 24)
-    gates[1] = _create_lock_gate(714.0)
+    _add_solid_rect(Rect2(524, 112, 64, 16), 1, false)
+    _add_solid_rect(Rect2(624, 96, 64, 16), 1, false)
+    _add_cover_post(600, 112, 24)
+    gates[1] = _create_lock_gate(712.0)
 
-    # ROOM 4: checkpoint / recovery room with a forgiving jump after the arena.
-    _add_solid_rect(Rect2(720, 136, 124, 24), 0, false)
-    _add_solid_rect(Rect2(876, 136, 84, 24), 0, false)
-    _add_solid_rect(Rect2(790, 108, 64, 16), 1, false)
-    _add_solid_rect(Rect2(880, 100, 64, 16), 1, false)
-    _add_instant_hazard(Rect2(844, 150, 32, 12))
+    # ROOM 4 (720-960): checkpoint + three-step maintenance climb. No death pit here.
+    _add_solid_rect(Rect2(720, 136, 240, 24), 0, false)
+    _add_solid_rect(Rect2(760, 120, 48, 16), 1, false)
+    _add_solid_rect(Rect2(824, 104, 48, 16), 1, false)
+    _add_solid_rect(Rect2(888, 88, 56, 16), 1, false)
 
-    # ROOM 5: vertical-priority chamber. A lift creates timing instead of static stairs.
-    _add_solid_rect(Rect2(960, 136, 240, 24), 0, false)
-    _add_solid_rect(Rect2(1088, 84, 88, 16), 1, false)
-    _add_moving_platform(Vector2(1016, 118), Vector2(1016, 82), Vector2(52, 10), 1.75)
-    _add_cover_post(1180, 104, 32)
+    # ROOM 5 (960-1200): lift-shaft timing challenge. Gap is survivable only by landing the lift.
+    _add_solid_rect(Rect2(960, 136, 64, 24), 0, true)
+    _add_solid_rect(Rect2(1080, 136, 120, 24), 0, true)
+    _add_solid_rect(Rect2(984, 104, 48, 16), 1, false)
+    _add_solid_rect(Rect2(1096, 104, 48, 16), 1, false)
+    _add_solid_rect(Rect2(1152, 88, 40, 16), 1, false)
+    _add_moving_platform(Vector2(1042, 120), Vector2(1064, 88), Vector2(38, 10), 1.45)
+    _add_instant_hazard(Rect2(1024, 148, 56, 18))
 
-    # ROOM 6: toxic transfer line. Two short lethal gaps with a moving bridge choice.
-    _add_solid_rect(Rect2(1200, 136, 64, 24), 0, false)
-    _add_solid_rect(Rect2(1296, 136, 80, 24), 0, false)
-    _add_solid_rect(Rect2(1408, 136, 32, 24), 0, false)
-    _add_solid_rect(Rect2(1218, 104, 62, 16), 1, false)
-    _add_solid_rect(Rect2(1360, 88, 64, 16), 1, false)
-    _add_moving_platform(Vector2(1304, 103), Vector2(1342, 103), Vector2(48, 10), 1.60)
-    _add_instant_hazard(Rect2(1264, 150, 32, 12))
-    _add_instant_hazard(Rect2(1376, 150, 32, 12))
+    # ROOM 6 (1200-1440): toxic sluice. Low route = short island jumps; high route = clean skill line.
+    _add_solid_rect(Rect2(1200, 136, 64, 24), 0, true)
+    _add_solid_rect(Rect2(1304, 136, 40, 24), 0, true)
+    _add_solid_rect(Rect2(1392, 136, 48, 24), 0, true)
+    _add_solid_rect(Rect2(1224, 104, 48, 16), 1, false)
+    _add_solid_rect(Rect2(1288, 88, 48, 16), 1, false)
+    _add_solid_rect(Rect2(1352, 104, 48, 16), 1, false)
+    _add_moving_platform(Vector2(1362, 122), Vector2(1384, 106), Vector2(34, 10), 1.30)
+    _add_instant_hazard(Rect2(1264, 148, 40, 18))
+    _add_instant_hazard(Rect2(1344, 148, 48, 18))
 
-    # ROOM 7: second checkpoint and pressure LOCKDOWN arena.
+    # ROOM 7 (1440-1680): checkpoint + pressure LOCKDOWN arena.
     _add_solid_rect(Rect2(1440, 136, 240, 24), 0, false)
     _add_solid_rect(Rect2(1504, 104, 64, 16), 1, false)
     _add_solid_rect(Rect2(1600, 104, 64, 16), 1, false)
     _add_cover_post(1584, 112, 24)
-    gates[2] = _create_lock_gate(1674.0)
+    gates[2] = _create_lock_gate(1672.0)
 
-    # ROOM 8: crossfire over a wide toxic trench. Moving platform is the safe route;
-    # skilled players may clear the whole gap from the upper ledge.
-    _add_solid_rect(Rect2(1680, 136, 116, 24), 0, false)
-    _add_solid_rect(Rect2(1840, 136, 80, 24), 0, false)
-    _add_solid_rect(Rect2(1710, 104, 72, 16), 1, false)
-    _add_solid_rect(Rect2(1844, 94, 64, 16), 1, false)
-    _add_moving_platform(Vector2(1800, 118), Vector2(1830, 118), Vector2(42, 10), 1.35)
-    _add_instant_hazard(Rect2(1796, 150, 44, 12))
+    # ROOM 8 (1680-1920): multi-jump trench with distinct low and high routes.
+    _add_solid_rect(Rect2(1680, 136, 56, 24), 0, true)
+    _add_solid_rect(Rect2(1888, 136, 32, 24), 0, true)
+    _add_solid_rect(Rect2(1704, 96, 52, 16), 1, false)
+    _add_solid_rect(Rect2(1776, 80, 48, 16), 1, false)
+    _add_solid_rect(Rect2(1848, 96, 52, 16), 1, false)
+    _add_moving_platform(Vector2(1754, 124), Vector2(1796, 124), Vector2(38, 10), 1.35)
+    _add_solid_rect(Rect2(1816, 116, 36, 12), 1, false)
+    _add_moving_platform(Vector2(1860, 124), Vector2(1880, 108), Vector2(34, 10), 1.20)
+    _add_instant_hazard(Rect2(1736, 148, 152, 18))
 
-    # ROOM 9: final gauntlet. No pit pressure; threat comes from three mobile enemies.
-    _add_solid_rect(Rect2(1920, 136, 240, 24), 0, false)
-    _add_solid_rect(Rect2(1952, 102, 72, 16), 1, false)
-    _add_solid_rect(Rect2(2072, 102, 72, 16), 1, false)
-    _add_cover_post(2040, 112, 24)
+    # ROOM 9 (1920-2160): descending maintenance stacks over a long trench.
+    _add_solid_rect(Rect2(1920, 136, 48, 24), 0, true)
+    _add_solid_rect(Rect2(2128, 136, 32, 24), 0, true)
+    _add_solid_rect(Rect2(1984, 88, 48, 16), 1, false)
+    _add_solid_rect(Rect2(2048, 104, 48, 16), 1, false)
+    _add_solid_rect(Rect2(2112, 120, 32, 16), 1, false)
+    _add_instant_hazard(Rect2(1968, 148, 160, 18))
 
-    # ROOM 10: elite kill-floor clearance. Exit stays sealed until the elite dies.
+    # ROOM 10 (2160-2400): final standard-enemy LOCKDOWN. Route choices remain open during combat.
     _add_solid_rect(Rect2(2160, 136, 240, 24), 0, false)
-    _add_solid_rect(Rect2(2196, 104, 76, 16), 1, false)
-    _add_solid_rect(Rect2(2280, 88, 64, 16), 1, false)
-    gates[3] = _create_lock_gate(2340.0)
-    _build_exit_gate(Vector2(2350, 64))
+    _add_solid_rect(Rect2(2192, 112, 56, 16), 1, false)
+    _add_solid_rect(Rect2(2272, 88, 56, 16), 1, false)
+    _add_solid_rect(Rect2(2344, 112, 40, 16), 1, false)
+    _add_cover_post(2256, 112, 24)
+    gates[3] = _create_lock_gate(2392.0)
+
+    # ROOM 11 (2400-2640): pre-boss traversal + boss checkpoint. Two short gaps, one high route.
+    _add_solid_rect(Rect2(2400, 136, 72, 24), 0, true)
+    _add_solid_rect(Rect2(2512, 136, 48, 24), 0, true)
+    _add_solid_rect(Rect2(2600, 136, 40, 24), 0, true)
+    _add_solid_rect(Rect2(2432, 104, 48, 16), 1, false)
+    _add_solid_rect(Rect2(2496, 88, 48, 16), 1, false)
+    _add_solid_rect(Rect2(2552, 104, 48, 16), 1, false)
+    _add_solid_rect(Rect2(2600, 88, 40, 16), 1, false)
+    _add_instant_hazard(Rect2(2472, 148, 40, 18))
+    _add_instant_hazard(Rect2(2560, 148, 40, 18))
+
+    # ROOM 12 (2640-2880): dedicated boss arena. No pits: difficulty comes from patterns.
+    _add_solid_rect(Rect2(2640, 136, 240, 24), 0, false)
+    _add_solid_rect(Rect2(2664, 96, 48, 16), 1, false)
+    _add_solid_rect(Rect2(2808, 96, 48, 16), 1, false)
+    boss_right_gate = _create_lock_gate(2870.0)
+    _build_exit_gate(Vector2(2832, 64))
 
 func _add_cover_post(x: float, y: float, height: float):
     _add_solid_rect(Rect2(x, y, 16, height), 1, false)
@@ -189,11 +239,48 @@ func _add_solid_rect(rect: Rect2, tile_variant: int, hazard_edge: bool):
         Vector2(rect.position.x + rect.size.x, rect.position.y + 1)
     ])
     edge.width = 1.0
-    edge.default_color = Color(1.0, 0.55, 0.12, 0.62) if hazard_edge else Color(0.35, 1.0, 0.20, 0.40)
+    edge.default_color = Color(1.0, 0.55, 0.12, 0.68) if hazard_edge else Color(0.35, 1.0, 0.20, 0.42)
     edge.z_index = -1
     add_child(edge)
 
+    # Elevated platforms get visible structural supports so art placement reads as architecture,
+    # not floating collision rectangles disconnected from the background.
+    if rect.position.y < 132.0 and rect.size.x >= 32.0:
+        _add_platform_supports(rect)
+
+func _add_platform_supports(rect: Rect2):
+    var underside = Line2D.new()
+    underside.points = PackedVector2Array([
+        Vector2(rect.position.x + 2.0, rect.end.y),
+        Vector2(rect.end.x - 2.0, rect.end.y)
+    ])
+    underside.width = 2.0
+    underside.default_color = Color(0.08, 0.16, 0.13, 0.72)
+    underside.z_index = -6
+    add_child(underside)
+
+    var support_count = max(1, int(floor(rect.size.x / 32.0)))
+    for i in range(support_count):
+        var t = (float(i) + 0.5) / float(support_count)
+        var support_x = lerp(rect.position.x + 6.0, rect.end.x - 6.0, t)
+        var support = Line2D.new()
+        support.points = PackedVector2Array([
+            Vector2(support_x, rect.end.y),
+            Vector2(support_x, FLOOR_Y)
+        ])
+        support.width = 2.0
+        support.default_color = Color(0.07, 0.14, 0.12, 0.52)
+        support.z_index = -7
+        add_child(support)
+
 func _add_moving_platform(start_position: Vector2, end_position: Vector2, platform_size: Vector2, travel_time: float):
+    var guide = Line2D.new()
+    guide.points = PackedVector2Array([start_position, end_position])
+    guide.width = 1.0
+    guide.default_color = Color(0.30, 0.72, 0.36, 0.22)
+    guide.z_index = -8
+    add_child(guide)
+
     var body = AnimatableBody2D.new()
     body.collision_layer = 1
     body.collision_mask = 0
@@ -213,7 +300,7 @@ func _add_moving_platform(start_position: Vector2, end_position: Vector2, platfo
         Vector2(platform_size.x * 0.5, platform_size.y * 0.5),
         Vector2(-platform_size.x * 0.5, platform_size.y * 0.5)
     ])
-    panel.color = Color(0.08, 0.14, 0.11, 0.98)
+    panel.color = Color(0.07, 0.13, 0.10, 0.98)
     panel.z_index = -1
     body.add_child(panel)
 
@@ -223,7 +310,7 @@ func _add_moving_platform(start_position: Vector2, end_position: Vector2, platfo
         Vector2(platform_size.x * 0.5 - 2.0, -platform_size.y * 0.5 + 1.0)
     ])
     rail.width = 1.0
-    rail.default_color = Color(0.40, 1.0, 0.25, 0.72)
+    rail.default_color = Color(0.46, 1.0, 0.28, 0.78)
     body.add_child(rail)
     add_child(body)
 
@@ -252,12 +339,22 @@ func _add_instant_hazard(rect: Rect2):
         rect.end,
         Vector2(rect.position.x, rect.end.y)
     ])
-    toxic.color = Color(0.25, 1.0, 0.08, 0.35)
+    toxic.color = Color(0.25, 1.0, 0.08, 0.42)
     toxic.z_index = -3
     add_child(toxic)
 
+    var warning = Line2D.new()
+    warning.points = PackedVector2Array([
+        Vector2(rect.position.x, rect.position.y),
+        Vector2(rect.end.x, rect.position.y)
+    ])
+    warning.width = 2.0
+    warning.default_color = Color(0.68, 1.0, 0.20, 0.72)
+    warning.z_index = -2
+    add_child(warning)
+
 func _on_instant_hazard_body_entered(body):
-    if body.is_in_group("players") and body.has_method("take_damage"):
+    if body.is_in_group("players"):
         body.health.force_kill()
 
 func _create_lock_gate(x: float):
@@ -290,15 +387,17 @@ func _create_lock_gate(x: float):
 func _open_gate(wave_id: int):
     if not gates.has(wave_id):
         return
-    var gate = gates[wave_id]
+    _open_gate_node(gates[wave_id])
+    gates[wave_id] = null
+    _flash_message("LOCKDOWN %d CLEARED" % wave_id, 1.0)
+
+func _open_gate_node(gate):
     if gate == null or not is_instance_valid(gate):
         return
     gate.collision_layer = 0
     var tween = create_tween()
     tween.tween_property(gate, "modulate", Color(1, 1, 1, 0), 0.24)
     tween.finished.connect(gate.queue_free)
-    gates[wave_id] = null
-    _flash_message("LOCKDOWN %d CLEARED" % wave_id, 1.0)
 
 func _build_exit_gate(pos: Vector2):
     var frame = Polygon2D.new()
@@ -309,19 +408,13 @@ func _build_exit_gate(pos: Vector2):
     frame.z_index = -5
     add_child(frame)
 
-    var left = Line2D.new()
-    left.points = PackedVector2Array([pos + Vector2(4, 6), pos + Vector2(4, 68)])
-    left.width = 3.0
-    left.default_color = Color(0.35, 1.0, 0.18, 0.62)
-    left.z_index = -4
-    add_child(left)
-
-    var right = Line2D.new()
-    right.points = PackedVector2Array([pos + Vector2(38, 6), pos + Vector2(38, 68)])
-    right.width = 3.0
-    right.default_color = Color(0.35, 1.0, 0.18, 0.62)
-    right.z_index = -4
-    add_child(right)
+    for x_offset in [4.0, 38.0]:
+        var side = Line2D.new()
+        side.points = PackedVector2Array([pos + Vector2(x_offset, 6), pos + Vector2(x_offset, 68)])
+        side.width = 3.0
+        side.default_color = Color(0.35, 1.0, 0.18, 0.62)
+        side.z_index = -4
+        add_child(side)
 
     _add_world_label(pos + Vector2(5, 24), "EXIT", Color(0.68, 1.0, 0.38, 0.82))
 
@@ -334,47 +427,51 @@ func _spawn_gameplay():
     player.camera.limit_right = int(STAGE_LENGTH)
     player.camera.limit_bottom = 160
 
-    # Free-roaming enemies establish the stage language before locked encounters.
-    _spawn_enemy(Vector2(190, 118), -1)
-    _spawn_enemy(Vector2(286, 118), 1)
-    _spawn_enemy(Vector2(420, 118), -1)
+    # Enemy positions use surface-top coordinates so feet, collision, and platforms line up.
+    _spawn_enemy_on_surface(188, 136, -1)
+    _spawn_enemy_on_surface(420, 136, -1)
 
-    # Lockdown 1: two staggered-height mobile guards.
-    _spawn_enemy(Vector2(548, 90), -1, 1)
-    _spawn_enemy(Vector2(670, 70), 1, 1)
+    # Lockdown 1.
+    _spawn_enemy_on_surface(548, 136, -1, 1)
+    _spawn_enemy_on_surface(654, 96, 1, 1)
 
-    _spawn_enemy(Vector2(812, 90), 1)
-    _spawn_enemy(Vector2(916, 82), -1)
-    _spawn_enemy(Vector2(1018, 118), 1)
-    _spawn_enemy(Vector2(1130, 66), -1)
-    _spawn_enemy(Vector2(1238, 88), 1)
-    _spawn_enemy(Vector2(1348, 78), -1)
+    # Stair / lift / sluice pressure stays sparse so platform timing remains readable.
+    _spawn_enemy_on_surface(836, 104, 1)
+    _spawn_enemy_on_surface(1120, 104, -1)
+    _spawn_enemy_on_surface(1238, 104, 1)
+    _spawn_enemy_on_surface(1408, 136, -1)
 
-    # Lockdown 2: flat arena pair designed around strafing/retreat behavior.
-    _spawn_enemy(Vector2(1538, 118), 1, 2)
-    _spawn_enemy(Vector2(1642, 118), -1, 2)
+    # Lockdown 2.
+    _spawn_enemy_on_surface(1528, 136, 1, 2)
+    _spawn_enemy_on_surface(1632, 104, -1, 2)
 
-    _spawn_enemy(Vector2(1738, 86), 1)
-    _spawn_enemy(Vector2(1870, 74), -1)
+    # Trench / descending stacks use high targets, not enemies sitting on landing zones.
+    _spawn_enemy_on_surface(1872, 96, -1)
+    _spawn_enemy_on_surface(2068, 104, 1)
 
-    # Final gauntlet and elite. Nothing here can be skipped by sprinting to the exit.
-    _spawn_enemy(Vector2(1980, 82), 1, 3)
-    _spawn_enemy(Vector2(2100, 82), -1, 3)
-    _spawn_enemy(Vector2(2260, 118), -1, 3, true)
+    # Lockdown 3: three-point crossfire before the boss approach.
+    _spawn_enemy_on_surface(2208, 136, 1, 3)
+    _spawn_enemy_on_surface(2300, 88, -1, 3)
+    _spawn_enemy_on_surface(2364, 112, -1, 3, true)
+
+    _spawn_enemy_on_surface(2528, 136, 1)
 
     var pickup = WeaponPickup.new()
-    pickup.global_position = Vector2(660, 68)
+    pickup.global_position = Vector2(656, 72)
     add_child(pickup)
 
-    _spawn_checkpoint(Vector2(754, 118), Vector2(770, 118))
-    _spawn_checkpoint(Vector2(1466, 118), Vector2(1488, 118))
+    _spawn_checkpoint(Vector2(740, 118), Vector2(752, 118))
+    _spawn_checkpoint(Vector2(1452, 118), Vector2(1468, 118))
+    _spawn_checkpoint(Vector2(2418, 118), Vector2(2432, 118))
 
-func _spawn_enemy(pos: Vector2, initial_direction: int = -1, wave_id: int = 0, elite: bool = false):
+    _spawn_boss()
+
+func _spawn_enemy_on_surface(x: float, surface_y: float, initial_direction: int = -1, wave_id: int = 0, elite: bool = false):
     var enemy = TestEnemy.new()
     enemy.patrol_direction = initial_direction
     if elite:
         enemy.make_elite()
-    enemy.global_position = pos
+    enemy.global_position = Vector2(x, surface_y - 12.0)
     enemy.defeated.connect(_on_enemy_defeated.bind(wave_id))
     add_child(enemy)
     if wave_id > 0:
@@ -387,6 +484,59 @@ func _on_enemy_defeated(_enemy, wave_id: int):
     wave_counts[wave_id] = max(0, int(wave_counts[wave_id]) - 1)
     if int(wave_counts[wave_id]) == 0:
         _open_gate(wave_id)
+
+func _spawn_boss():
+    boss = KillingFloorRotor.new()
+    boss.setup(2680.0, 2848.0)
+    boss.global_position = Vector2(2784, 136)
+    boss.defeated.connect(_on_boss_defeated)
+    boss.health_changed.connect(_on_boss_health_changed)
+    add_child(boss)
+    boss.set_active(false)
+    _on_boss_health_changed(48, 48)
+
+func _activate_boss_encounter():
+    if boss_active or boss_defeated or boss == null:
+        return
+    boss_active = true
+    boss_left_gate = _create_lock_gate(BOSS_ARENA_START + 8.0)
+    boss.set_active(true)
+    if boss_hud_root != null:
+        boss_hud_root.visible = true
+    _on_boss_health_changed(boss.health.current_hp, boss.health.max_hp)
+    _flash_message("KILLING FLOOR ROTOR // ENGAGED", 1.0)
+
+func _on_boss_health_changed(current_hp, max_hp):
+    if boss_bar_fill == null:
+        return
+    var ratio = clamp(float(current_hp) / float(max(1, max_hp)), 0.0, 1.0)
+    boss_bar_fill.size = Vector2(120.0 * ratio, 4.0)
+    if boss_bar_label != null:
+        boss_bar_label.text = "KILLING FLOOR ROTOR  %02d/%02d" % [current_hp, max_hp]
+
+func _on_boss_defeated(_defeated_boss):
+    boss_defeated = true
+    boss_active = false
+    _open_gate_node(boss_left_gate)
+    _open_gate_node(boss_right_gate)
+    boss_left_gate = null
+    boss_right_gate = null
+    if boss_hud_root != null:
+        boss_hud_root.visible = false
+    _flash_message("ROTOR DESTROYED // EXIT OPEN", 1.35)
+
+func _reset_boss_encounter():
+    if boss_defeated:
+        return
+    boss_active = false
+    if boss != null and is_instance_valid(boss):
+        boss.queue_free()
+    if boss_left_gate != null and is_instance_valid(boss_left_gate):
+        boss_left_gate.queue_free()
+    boss_left_gate = null
+    if boss_hud_root != null:
+        boss_hud_root.visible = false
+    _spawn_boss()
 
 func _spawn_checkpoint(marker_position: Vector2, respawn_position: Vector2):
     var checkpoint = Checkpoint.new()
@@ -410,6 +560,8 @@ func _build_ui():
     var touch = TouchControls.new()
     touch_layer.add_child(touch)
 
+    _build_boss_hud()
+
     var message_layer = CanvasLayer.new()
     message_layer.layer = 45
     add_child(message_layer)
@@ -423,6 +575,46 @@ func _build_ui():
     message_label.add_theme_constant_override("shadow_offset_x", 1)
     message_label.add_theme_constant_override("shadow_offset_y", 1)
     message_layer.add_child(message_label)
+
+func _build_boss_hud():
+    var layer = CanvasLayer.new()
+    layer.layer = 44
+    add_child(layer)
+
+    boss_hud_root = Control.new()
+    boss_hud_root.position = Vector2(52, 5)
+    boss_hud_root.size = Vector2(136, 18)
+    boss_hud_root.visible = false
+    layer.add_child(boss_hud_root)
+
+    var panel = ColorRect.new()
+    panel.position = Vector2.ZERO
+    panel.size = Vector2(136, 18)
+    panel.color = Color(0.01, 0.03, 0.025, 0.82)
+    panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    boss_hud_root.add_child(panel)
+
+    boss_bar_label = Label.new()
+    boss_bar_label.position = Vector2(4, 1)
+    boss_bar_label.size = Vector2(128, 7)
+    boss_bar_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    boss_bar_label.add_theme_font_size_override("font_size", 5)
+    boss_bar_label.add_theme_color_override("font_color", Color(0.88, 1.0, 0.68))
+    boss_hud_root.add_child(boss_bar_label)
+
+    var bar_bg = ColorRect.new()
+    bar_bg.position = Vector2(8, 11)
+    bar_bg.size = Vector2(120, 4)
+    bar_bg.color = Color(0.12, 0.15, 0.13, 0.95)
+    bar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    boss_hud_root.add_child(bar_bg)
+
+    boss_bar_fill = ColorRect.new()
+    boss_bar_fill.position = Vector2(8, 11)
+    boss_bar_fill.size = Vector2(120, 4)
+    boss_bar_fill.color = Color(0.42, 1.0, 0.20, 0.90)
+    boss_bar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    boss_hud_root.add_child(boss_bar_fill)
 
 func _show_stage_intro():
     message_label.text = "STAGE 1 // KILLING FLOOR INFILTRATION"
@@ -442,10 +634,13 @@ func _on_player_died(_dead_player):
     if handling_death:
         return
     handling_death = true
+    var died_during_boss = boss_active and not boss_defeated
     var has_lives = GameState.lose_life()
     if has_lives:
         message_label.text = "CHECKPOINT RESTART"
         await get_tree().create_timer(0.65).timeout
+        if died_during_boss:
+            _reset_boss_encounter()
         player.respawn_at(GameState.checkpoint_position)
         message_label.text = ""
         handling_death = false
