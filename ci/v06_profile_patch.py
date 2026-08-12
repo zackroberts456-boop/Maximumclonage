@@ -16,14 +16,14 @@ if needle not in s:
 s=s.replace(needle,repl,1)
 p.write_text(s,encoding='utf-8')
 
-# Also instrument the main loop numerically. Sampling GET_VCOUNTER after
-# SPR_update includes gameplay + sprite-engine CPU work but occurs before the
-# VBlank wait. The displayed values are therefore deliberately excluded from
-# the sample they report.
+# Instrument the main loop numerically. Sampling GET_VCOUNTER after gameplay +
+# SPR_update shows how much of the 224-line active-frame budget was consumed
+# before the VBlank wait. Report a rolling 64-frame window so boot/setup spikes
+# do not permanently poison the displayed MAX/AVG values.
 p=dst/'src'/'main.c'
 m=p.read_text(encoding='utf-8')
 old='''    while (TRUE) {\n        mc_game_frame();\n        SPR_update();\n        SYS_doVBlankProcess();\n    }'''
-new='''    {\n        u16 profFrames=0;\n        u16 profWindow=0;\n        u16 profMax=0;\n        u32 profSum=0;\n        char profBuf[40];\n\n        while (TRUE) {\n            u16 load;\n            mc_game_frame();\n            SPR_update();\n\n            load=GET_VCOUNTER;\n            if(load<224){\n                if(load>profMax) profMax=load;\n                profSum+=load;\n                profWindow++;\n            }\n            profFrames++;\n\n            if((profFrames & 31)==0 && profWindow){\n                const u16 avg=(u16)(profSum/profWindow);\n                VDP_setTextPlane(BG_A);\n                VDP_setTextPalette(PAL0);\n                sprintf(profBuf,"LOAD %03u AVG %03u MAX %03u",load,avg,profMax);\n                VDP_drawTextFill(profBuf,8,26,31);\n                VDP_setTextPlane(WINDOW);\n            }\n\n            SYS_doVBlankProcess();\n        }\n    }'''
+new='''    {\n        u16 profFrames=0;\n        u16 profWindow=0;\n        u16 profMax=0;\n        u32 profSum=0;\n        char profBuf[40];\n\n        while (TRUE) {\n            u16 load;\n            mc_game_frame();\n            SPR_update();\n\n            load=GET_VCOUNTER;\n            if(load>=224) load=224;\n            if(load>profMax) profMax=load;\n            profSum+=load;\n            profWindow++;\n            profFrames++;\n\n            if((profFrames & 63)==0 && profWindow){\n                const u16 avg=(u16)(profSum/profWindow);\n                VDP_setTextPlane(BG_A);\n                VDP_setTextPalette(PAL0);\n                sprintf(profBuf,"LOAD %03u AVG %03u MAX %03u",load,avg,profMax);\n                VDP_drawTextFill(profBuf,8,26,31);\n                VDP_setTextPlane(WINDOW);\n                profWindow=0;\n                profSum=0;\n                profMax=0;\n            }\n\n            SYS_doVBlankProcess();\n        }\n    }'''
 if old not in m:
     raise SystemExit('profile main-loop anchor not found')
 m=m.replace(old,new,1)
