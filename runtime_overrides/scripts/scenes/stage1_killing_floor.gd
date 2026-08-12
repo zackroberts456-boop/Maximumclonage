@@ -9,7 +9,7 @@ const DebugOverlay = preload("res://scripts/ui/debug_overlay.gd")
 const TouchControls = preload("res://scripts/ui/touch_controls.gd")
 
 const STAGE_ID = "stage_01_killing_floor"
-const STAGE_LENGTH = 2320.0
+const STAGE_LENGTH = 2400.0
 const TILE_SIZE = 16
 
 var player
@@ -32,7 +32,7 @@ func _ready():
 func _process(_delta):
     if stage_complete:
         return
-    if player != null and player.global_position.x >= STAGE_LENGTH - 72.0:
+    if player != null and player.global_position.x >= STAGE_LENGTH - 74.0:
         _complete_stage_slice()
 
 func _build_background():
@@ -44,62 +44,105 @@ func _build_background():
         sprite.position = Vector2(i * 240, 0)
         sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
         sprite.z_index = -30
-        var brightness = 0.72 + float(i % 3) * 0.06
+        var brightness = 0.72 + float(i % 3) * 0.055
         sprite.modulate = Color(brightness, brightness + 0.04, brightness, 1.0)
         add_child(sprite)
+
+        # Room seams make the stage read as authored spaces rather than one endless strip.
+        if i > 0:
+            var seam = Line2D.new()
+            seam.points = PackedVector2Array([Vector2(i * 240, 18), Vector2(i * 240, 136)])
+            seam.width = 2.0
+            seam.default_color = Color(0.20, 0.55, 0.28, 0.24)
+            seam.z_index = -20
+            add_child(seam)
 
     var shadow = Polygon2D.new()
     shadow.polygon = PackedVector2Array([
         Vector2(0, 0), Vector2(STAGE_LENGTH, 0),
         Vector2(STAGE_LENGTH, 160), Vector2(0, 160)
     ])
-    shadow.color = Color(0.0, 0.03, 0.02, 0.14)
+    shadow.color = Color(0.0, 0.03, 0.02, 0.12)
     shadow.z_index = -28
     add_child(shadow)
 
-    for x in [320.0, 704.0, 1088.0, 1472.0, 1856.0, 2208.0]:
+    for x in [228.0, 468.0, 708.0, 948.0, 1188.0, 1428.0, 1668.0, 1908.0, 2148.0, 2388.0]:
         var glow = Polygon2D.new()
         glow.polygon = PackedVector2Array([
-            Vector2(x, 26), Vector2(x + 5, 26), Vector2(x + 5, 132), Vector2(x, 132)
+            Vector2(x, 26), Vector2(x + 4, 26), Vector2(x + 4, 132), Vector2(x, 132)
         ])
-        glow.color = Color(0.25, 1.0, 0.18, 0.11)
+        glow.color = Color(0.25, 1.0, 0.18, 0.10)
         glow.z_index = -24
         add_child(glow)
 
-    _add_world_label(Vector2(18, 42), "FACILITY-12 // KILLING FLOOR", Color(0.55, 1.0, 0.32, 0.42))
-    _add_world_label(Vector2(815, 42), "SECTOR B // CLONE TRANSFER", Color(0.55, 1.0, 0.32, 0.38))
-    _add_world_label(Vector2(1610, 42), "SECTOR C // PURGE LINE", Color(1.0, 0.72, 0.22, 0.42))
+    _add_world_label(Vector2(18, 42), "SECTOR A // ENTRY LINE", Color(0.55, 1.0, 0.32, 0.48))
+    _add_world_label(Vector2(492, 42), "SECTOR B // CROSSFIRE BAY", Color(0.55, 1.0, 0.32, 0.44))
+    _add_world_label(Vector2(982, 42), "SECTOR C // TRANSFER SHAFT", Color(0.55, 1.0, 0.32, 0.44))
+    _add_world_label(Vector2(1450, 42), "SECTOR D // PURGE LINE", Color(1.0, 0.72, 0.22, 0.46))
+    _add_world_label(Vector2(1940, 42), "SECTOR E // KILL FLOOR", Color(1.0, 0.55, 0.20, 0.50))
 
 func _build_geometry():
-    # Main route. Gaps are capped at 40 px so even the slowest character clears them.
-    _add_solid_rect(Rect2(0, 136, 400, 24), 0, true)
-    _add_solid_rect(Rect2(440, 136, 392, 24), 0, true)
-    _add_solid_rect(Rect2(832, 136, 320, 24), 0, true)
-    _add_solid_rect(Rect2(1192, 136, 440, 24), 0, true)
-    _add_solid_rect(Rect2(1672, 136, 648, 24), 0, true)
+    # Room 1 (0-240): safe runway. Teach movement + firing before demanding a jump.
+    _add_solid_rect(Rect2(0, 136, 240, 24), 0, false)
+    _add_solid_rect(Rect2(144, 112, 72, 16), 1, false)
 
-    # Alternate/high-ground route. All characters can make every jump.
-    _add_solid_rect(Rect2(176, 104, 128, 16), 1, false)
-    _add_solid_rect(Rect2(512, 104, 112, 16), 1, false)
-    _add_solid_rect(Rect2(640, 88, 96, 16), 1, false)
-    _add_solid_rect(Rect2(896, 104, 128, 16), 1, false)
-    _add_solid_rect(Rect2(1056, 88, 96, 16), 1, false)
-    _add_solid_rect(Rect2(1264, 104, 112, 16), 1, false)
-    _add_solid_rect(Rect2(1392, 88, 112, 16), 1, false)
-    _add_solid_rect(Rect2(1512, 72, 96, 16), 1, false)
-    _add_solid_rect(Rect2(1760, 104, 112, 16), 1, false)
-    _add_solid_rect(Rect2(1888, 88, 112, 16), 1, false)
-    _add_solid_rect(Rect2(2032, 104, 112, 16), 1, false)
-    _add_solid_rect(Rect2(2160, 88, 96, 16), 1, false)
+    # Room 2 (240-480): first readable 32px pit with an optional high route.
+    _add_solid_rect(Rect2(240, 136, 80, 24), 0, false)
+    _add_solid_rect(Rect2(352, 136, 128, 24), 0, false)
+    _add_solid_rect(Rect2(272, 108, 72, 16), 1, false)
+    _add_solid_rect(Rect2(368, 104, 80, 16), 1, false)
 
-    # Cover/door-frame obstacles force short hops and firing-angle changes.
-    _add_solid_rect(Rect2(352, 112, 16, 24), 1, false)
-    _add_solid_rect(Rect2(784, 112, 16, 24), 1, false)
-    _add_solid_rect(Rect2(1136, 104, 16, 32), 1, false)
-    _add_solid_rect(Rect2(1616, 104, 16, 32), 1, false)
-    _add_solid_rect(Rect2(2016, 112, 16, 24), 1, false)
+    # Room 3 (480-720): crossfire bay. Continuous floor, staggered firing heights.
+    _add_solid_rect(Rect2(480, 136, 240, 24), 0, false)
+    _add_solid_rect(Rect2(520, 112, 72, 16), 1, false)
+    _add_solid_rect(Rect2(616, 96, 88, 16), 1, false)
+    _add_cover_post(604, 112, 24)
 
-    _build_exit_gate(Vector2(2264, 64))
+    # Room 4 (720-960): checkpoint then a second pit with a forgiving bridge route.
+    _add_solid_rect(Rect2(720, 136, 124, 24), 0, false)
+    _add_solid_rect(Rect2(876, 136, 84, 24), 0, false)
+    _add_solid_rect(Rect2(792, 112, 64, 16), 1, false)
+    _add_solid_rect(Rect2(880, 104, 64, 16), 1, false)
+
+    # Room 5 (960-1200): staircase chamber. Introduces vertical target priority.
+    _add_solid_rect(Rect2(960, 136, 240, 24), 0, false)
+    _add_solid_rect(Rect2(992, 112, 80, 16), 1, false)
+    _add_solid_rect(Rect2(1088, 88, 88, 16), 1, false)
+    _add_cover_post(1180, 104, 32)
+
+    # Room 6 (1200-1440): two short toxic-transfer gaps with overhead recovery route.
+    _add_solid_rect(Rect2(1200, 136, 64, 24), 0, false)
+    _add_solid_rect(Rect2(1296, 136, 80, 24), 0, false)
+    _add_solid_rect(Rect2(1408, 136, 32, 24), 0, false)
+    _add_solid_rect(Rect2(1224, 108, 72, 16), 1, false)
+    _add_solid_rect(Rect2(1320, 100, 72, 16), 1, false)
+    _add_solid_rect(Rect2(1392, 84, 48, 16), 1, false)
+
+    # Room 7 (1440-1680): second checkpoint, then a flat pressure arena.
+    _add_solid_rect(Rect2(1440, 136, 240, 24), 0, false)
+    _add_solid_rect(Rect2(1512, 108, 64, 16), 1, false)
+    _add_solid_rect(Rect2(1600, 108, 64, 16), 1, false)
+    _add_cover_post(1584, 112, 24)
+
+    # Room 8 (1680-1920): moving crossfire + one 36px commitment jump.
+    _add_solid_rect(Rect2(1680, 136, 120, 24), 0, false)
+    _add_solid_rect(Rect2(1836, 136, 84, 24), 0, false)
+    _add_solid_rect(Rect2(1712, 108, 72, 16), 1, false)
+    _add_solid_rect(Rect2(1816, 96, 80, 16), 1, false)
+
+    # Room 9 (1920-2160): pre-exit gauntlet. No pits; difficulty is enemy composition.
+    _add_solid_rect(Rect2(1920, 136, 240, 24), 0, false)
+    _add_solid_rect(Rect2(1952, 104, 72, 16), 1, false)
+    _add_solid_rect(Rect2(2072, 104, 72, 16), 1, false)
+    _add_cover_post(2040, 112, 24)
+
+    # Room 10 (2160-2400): decompression / exit approach. Give the player breathing room.
+    _add_solid_rect(Rect2(2160, 136, 240, 24), 0, false)
+    _add_solid_rect(Rect2(2200, 108, 80, 16), 1, false)
+    _build_exit_gate(Vector2(2338, 64))
+
+func _add_cover_post(x: float, y: float, height: float):
+    _add_solid_rect(Rect2(x, y, 16, height), 1, false)
 
 func _add_solid_rect(rect: Rect2, tile_variant: int, hazard_edge: bool):
     var body = StaticBody2D.new()
@@ -134,7 +177,7 @@ func _add_solid_rect(rect: Rect2, tile_variant: int, hazard_edge: bool):
         Vector2(rect.position.x + rect.size.x, rect.position.y + 1)
     ])
     edge.width = 1.0
-    edge.default_color = Color(1.0, 0.55, 0.12, 0.62) if hazard_edge else Color(0.35, 1.0, 0.20, 0.48)
+    edge.default_color = Color(1.0, 0.55, 0.12, 0.62) if hazard_edge else Color(0.35, 1.0, 0.20, 0.42)
     edge.z_index = -1
     add_child(edge)
 
@@ -172,26 +215,44 @@ func _spawn_gameplay():
     player.camera.limit_right = int(STAGE_LENGTH)
     player.camera.limit_bottom = 160
 
-    var enemy_positions = [
-        Vector2(250, 118), Vector2(374, 118),
-        Vector2(548, 86), Vector2(704, 70),
-        Vector2(912, 118), Vector2(1016, 118),
-        Vector2(1296, 86), Vector2(1460, 70),
-        Vector2(1712, 118), Vector2(1840, 86),
-        Vector2(2056, 86), Vector2(2192, 70)
-    ]
-    for pos in enemy_positions:
-        _spawn_enemy(pos)
+    # Encounters are authored by room: teach -> test -> escalate -> recover.
+    _spawn_enemy(Vector2(190, 118), -1)
+
+    _spawn_enemy(Vector2(286, 118), 1)
+    _spawn_enemy(Vector2(420, 118), -1)
+
+    _spawn_enemy(Vector2(548, 92), -1)
+    _spawn_enemy(Vector2(668, 76), 1)
+
+    _spawn_enemy(Vector2(812, 92), 1)
+    _spawn_enemy(Vector2(916, 84), -1)
+
+    _spawn_enemy(Vector2(1016, 118), 1)
+    _spawn_enemy(Vector2(1132, 68), -1)
+
+    _spawn_enemy(Vector2(1238, 90), 1)
+    _spawn_enemy(Vector2(1348, 80), -1)
+
+    _spawn_enemy(Vector2(1538, 118), 1)
+    _spawn_enemy(Vector2(1642, 118), -1)
+
+    _spawn_enemy(Vector2(1740, 88), 1)
+    _spawn_enemy(Vector2(1870, 76), -1)
+
+    _spawn_enemy(Vector2(1980, 84), 1)
+    _spawn_enemy(Vector2(2100, 84), -1)
+    _spawn_enemy(Vector2(2238, 88), -1)
 
     var pickup = WeaponPickup.new()
-    pickup.global_position = Vector2(688, 66)
+    pickup.global_position = Vector2(660, 72)
     add_child(pickup)
 
-    _spawn_checkpoint(Vector2(848, 118), Vector2(864, 118))
-    _spawn_checkpoint(Vector2(1640, 118), Vector2(1696, 118))
+    _spawn_checkpoint(Vector2(754, 118), Vector2(770, 118))
+    _spawn_checkpoint(Vector2(1466, 118), Vector2(1488, 118))
 
-func _spawn_enemy(pos: Vector2):
+func _spawn_enemy(pos: Vector2, initial_direction: int = -1):
     var enemy = TestEnemy.new()
+    enemy.patrol_direction = initial_direction
     enemy.global_position = pos
     add_child(enemy)
 
@@ -206,7 +267,6 @@ func _build_ui():
     hud.setup(player)
     add_child(hud)
 
-    # Debug tools remain available on desktop but never obscure a normal mobile build.
     if not OS.has_feature("mobile"):
         var debug = DebugOverlay.new()
         debug.setup(player)
