@@ -5,11 +5,21 @@ ROM="${1:?ROM path required}"
 QA_DIR="${2:-$PWD/qa-blastem}"
 mkdir -p "$QA_DIR"
 
-BLASTEM_URL="https://www.retrodev.com/blastem/nightlies/blastem64-0.6.3-pre-732f5689d438.tar.gz"
+BLASTEM_INDEX="https://www.retrodev.com/blastem/nightlies/"
+BLASTEM_FALLBACK="blastem64-0.6.3-pre-e75638f42420.tar.gz"
 
 sudo apt-get update -qq
 sudo apt-get install -y -qq xvfb xdotool scrot x11-utils >/dev/null
-curl -L --retry 3 --fail --silent --show-error "$BLASTEM_URL" -o /tmp/blastem64.tar.gz
+
+# Resolve an actually listed 64-bit Linux nightly instead of pinning a build
+# that may later be retired from the upstream directory.
+INDEX_HTML="$(curl -A 'MaximumClonage-CI/1.0' -L --retry 3 --fail --silent --show-error "$BLASTEM_INDEX" || true)"
+BLASTEM_ARCHIVE="$(printf '%s' "$INDEX_HTML" | grep -oE 'blastem64-0\.6\.3-pre-[0-9a-f]+\.tar\.gz' | head -1 || true)"
+if [ -z "$BLASTEM_ARCHIVE" ]; then BLASTEM_ARCHIVE="$BLASTEM_FALLBACK"; fi
+BLASTEM_URL="${BLASTEM_INDEX}${BLASTEM_ARCHIVE}"
+echo "$BLASTEM_URL" | tee "$QA_DIR/blastem-download-url.txt"
+
+curl -A 'MaximumClonage-CI/1.0' -L --retry 3 --fail --silent --show-error "$BLASTEM_URL" -o /tmp/blastem64.tar.gz
 rm -rf /tmp/blastem-nightly
 mkdir -p /tmp/blastem-nightly
 tar -xzf /tmp/blastem64.tar.gz -C /tmp/blastem-nightly
@@ -63,7 +73,6 @@ trap cleanup EXIT
 EMU_PID=$!
 echo "$EMU_PID" > "$QA_DIR/blastem-pid.txt"
 
-# SDL can take a few seconds to create the X11 window on a cold hosted runner.
 WID=""
 for _ in $(seq 1 20); do
   if ! kill -0 "$EMU_PID" 2>/dev/null; then break; fi
@@ -81,7 +90,6 @@ done
 xwininfo -root -tree > "$QA_DIR/xwininfo-tree.txt" 2>&1 || true
 xdotool search --onlyvisible --name '.*' getwindowname %@ > "$QA_DIR/windows.txt" 2>&1 || true
 ps -ef > "$QA_DIR/processes.txt" 2>&1 || true
-
 scrot "$QA_DIR/boot-screen.png" || true
 
 if [ -n "$WID" ]; then
@@ -98,14 +106,12 @@ if [ -n "$WID" ]; then
   sleep 2
 else
   echo "No BlastEm window detected" | tee "$QA_DIR/window-id.txt"
-  # Still leave the emulator alive briefly so logs can expose startup trouble.
   sleep 3
 fi
 
 scrot "$QA_DIR/after-input.png" || true
 find "$QA_DIR" -type f -name 'blastem_*.png' -print | head -10 > "$QA_DIR/internal-screenshots.txt" || true
 
-# Capture state before killing the emulator.
 if kill -0 "$EMU_PID" 2>/dev/null; then echo ALIVE > "$QA_DIR/emulator-state.txt"; else echo EXITED > "$QA_DIR/emulator-state.txt"; fi
 kill "$EMU_PID" 2>/dev/null || true
 wait "$EMU_PID" 2>/dev/null || true
