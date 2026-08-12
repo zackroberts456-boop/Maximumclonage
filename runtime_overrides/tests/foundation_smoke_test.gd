@@ -22,9 +22,11 @@ func _initialize():
         "res://scenes/test_room.tscn",
         "res://scripts/actors/player.gd",
         "res://scripts/actors/test_enemy.gd",
+        "res://scripts/actors/killing_floor_rotor.gd",
         "res://scripts/scenes/stage1_killing_floor.gd",
         "res://scripts/ui/hud.gd",
-        "res://scripts/ui/touch_controls.gd"
+        "res://scripts/ui/touch_controls.gd",
+        "res://assets/bosses/killing_floor_rotor.png"
     ]:
         _check(ResourceLoader.exists(path), "resource exists: %s" % path)
         if ResourceLoader.exists(path):
