@@ -23,13 +23,21 @@ func _initialize():
         "res://scripts/actors/player.gd",
         "res://scripts/actors/player_v06.gd",
         "res://scripts/actors/test_enemy.gd",
+        "res://scripts/actors/acid_spitter.gd",
         "res://scripts/actors/killing_floor_rotor.gd",
+        "res://scripts/weapons/acid_glob.gd",
+        "res://scripts/world/acid_puddle.gd",
         "res://scripts/world/ladder.gd",
         "res://scripts/scenes/stage1_killing_floor.gd",
         "res://scripts/scenes/stage1_killing_floor_v06.gd",
+        "res://scripts/scenes/stage1_killing_floor_v07.gd",
         "res://scripts/ui/hud.gd",
         "res://scripts/ui/touch_controls.gd",
-        "res://assets/bosses/killing_floor_rotor.png"
+        "res://assets/bosses/killing_floor_rotor.png",
+        "res://assets/enemies/clone_grunt_production.png",
+        "res://assets/enemies/acid_spitter_production.png",
+        "res://assets/environment/lab_environment_prod_v2.png",
+        "res://assets/environment/lab_tiles_prod_16.png"
     ]:
         _check(ResourceLoader.exists(path), "resource exists: %s" % path)
         if ResourceLoader.exists(path):
