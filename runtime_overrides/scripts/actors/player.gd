@@ -6,7 +6,6 @@ const CharacterDatabase = preload("res://scripts/data/character_database.gd")
 const GameRules = preload("res://scripts/data/game_rules.gd")
 const HealthComponent = preload("res://scripts/components/health_component.gd")
 const WeaponController = preload("res://scripts/weapons/weapon_controller.gd")
-const NADA_FIRE_ATLAS = "res://assets/players/nada_fire_6frames_clean.png"
 
 var character_id = "nada"
 var character_data = {}
@@ -178,8 +177,11 @@ func _build_sprite_frames(texture):
     _add_animation(frames, texture, "idle", [0, 1, 2, 3, 4, 5], 7.0, true)
     _add_animation(frames, texture, "run", [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19], 13.0, true)
 
-    if character_id == "nada" and ResourceLoader.exists(NADA_FIRE_ATLAS):
-        _add_horizontal_animation(frames, load(NADA_FIRE_ATLAS), "shoot", 6, Vector2i(224, 160), 12.0, true)
+    # Nada's old 34-39 range crosses pose boundaries in the source atlas; frames
+    # 35-37 contain clipped/stray pixels from neighboring art. Use the clean,
+    # full-height ready-fire sequence until the dedicated firing strip is normalized.
+    if character_id == "nada":
+        _add_animation(frames, texture, "shoot", [24, 25, 26, 27, 28, 29], 10.0, true)
     else:
         _add_animation(frames, texture, "shoot", [34, 35, 36, 37, 38, 39], 14.0, true)
 
@@ -196,16 +198,6 @@ func _add_animation(frames, texture, animation_name, indices, fps, should_loop):
         var atlas = AtlasTexture.new()
         atlas.atlas = texture
         atlas.region = Rect2((index % 10) * 224, int(index / 10) * 160, 224, 160)
-        frames.add_frame(animation_name, atlas)
-
-func _add_horizontal_animation(frames, texture, animation_name, frame_count: int, frame_size: Vector2i, fps: float, should_loop: bool):
-    frames.add_animation(animation_name)
-    frames.set_animation_speed(animation_name, fps)
-    frames.set_animation_loop(animation_name, should_loop)
-    for index in range(frame_count):
-        var atlas = AtlasTexture.new()
-        atlas.atlas = texture
-        atlas.region = Rect2(index * frame_size.x, 0, frame_size.x, frame_size.y)
         frames.add_frame(animation_name, atlas)
 
 func take_damage(amount, source_position = Vector2.ZERO):
