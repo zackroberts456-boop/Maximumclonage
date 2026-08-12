@@ -2,6 +2,7 @@ name: Build Android APK
 
 on:
   push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -30,6 +31,22 @@ jobs:
           unzip -q MaximumClonage_Runtime_Project.zip -d "$PROJECT_DIR"
           test -f "$PROJECT_DIR/project.godot"
           test -f "$PROJECT_DIR/export_presets.cfg"
+
+      - name: Apply master-project overrides
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d runtime_overrides ]; then
+            rsync -a runtime_overrides/ "$PROJECT_DIR"/
+          fi
+          if [ -d runtime_assets_b64 ]; then
+            while IFS= read -r encoded; do
+              rel="${encoded#runtime_assets_b64/}"
+              out="$PROJECT_DIR/${rel%.b64}"
+              mkdir -p "$(dirname "$out")"
+              base64 --decode "$encoded" > "$out"
+            done < <(find runtime_assets_b64 -type f -name '*.b64' -print)
+          fi
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -91,8 +108,9 @@ jobs:
           EOF
 
           # Godot's Android exporter requires mobile VRAM texture compression.
-          sed -i '/textures\/canvas_textures\/default_texture_filter=0/a textures/vram_compression/import_etc2_astc=true' \
-            "$PROJECT_DIR/project.godot"
+          grep -q 'textures/vram_compression/import_etc2_astc=true' "$PROJECT_DIR/project.godot" || \
+            sed -i '/textures\/canvas_textures\/default_texture_filter=0/a textures/vram_compression/import_etc2_astc=true' \
+              "$PROJECT_DIR/project.godot"
 
       - name: Validate and smoke test extracted project
         shell: bash
