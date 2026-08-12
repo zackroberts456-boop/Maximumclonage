@@ -39,13 +39,33 @@ jobs:
           if [ -d runtime_overrides ]; then
             rsync -a runtime_overrides/ "$PROJECT_DIR"/
           fi
+
+          # Single-file base64 assets.
           if [ -d runtime_assets_b64 ]; then
             while IFS= read -r encoded; do
               rel="${encoded#runtime_assets_b64/}"
               out="$PROJECT_DIR/${rel%.b64}"
               mkdir -p "$(dirname "$out")"
               base64 --decode "$encoded" > "$out"
-            done < <(find runtime_assets_b64 -type f -name '*.b64' -print)
+            done < <(find runtime_assets_b64 -type f -name '*.b64' -print | sort)
+          fi
+
+          # Large production binaries are stored as small text chunks so they can be
+          # reviewed/transported safely by the connected development tooling.
+          if [ -d runtime_asset_parts ]; then
+            while IFS= read -r first_part; do
+              rel="${first_part#runtime_asset_parts/}"
+              encoded_rel="${rel%.part00}"
+              out="$PROJECT_DIR/${encoded_rel%.b64}"
+              prefix="${first_part%.part00}"
+              mkdir -p "$(dirname "$out")"
+              cat "${prefix}".part* | base64 --decode > "$out"
+            done < <(find runtime_asset_parts -type f -name '*.part00' -print | sort)
+          fi
+
+          # Guard the Stage 1 production boss asset against silent truncation.
+          if [ -f "$PROJECT_DIR/assets/bosses/killing_floor_rotor.png" ]; then
+            echo "5dbfe3361cd0b7b61da1421a7e4e7db7bcdcf77aa87c9222c3850fc4821b0d2e  $PROJECT_DIR/assets/bosses/killing_floor_rotor.png" | sha256sum -c -
           fi
 
       - name: Set up Java 17
