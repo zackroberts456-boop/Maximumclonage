@@ -11,7 +11,15 @@ const ACTIVATION_RANGE = 220.0
 const SHOOT_MIN_RANGE = 66.0
 const SHOOT_MAX_RANGE = 142.0
 const RETREAT_RANGE = 42.0
-const SPRITE_REST_Y = -31.0
+
+# The production Clone Grunt has a ~145 px opaque standing silhouette inside a
+# 224 px source texture. 0.52 puts it at ~75 px in the 240x160 world, matching
+# the playable-character scale instead of the tiny ~43 px silhouette in v0.8.
+const NORMAL_SPRITE_SCALE = 0.52
+const ELITE_SPRITE_SCALE = 0.56
+const BODY_BOTTOM_Y = 12.0
+const SOURCE_CENTER_Y = 112.0
+const SOURCE_OPAQUE_BOTTOM_Y = 220.0
 
 var spawn_x = 0.0
 var patrol_direction = -1
@@ -27,7 +35,8 @@ var current_state = "patrol"
 var walk_phase = 0.0
 var recoil_left = 0.0
 var elite = false
-var base_sprite_scale = 0.30
+var base_sprite_scale = NORMAL_SPRITE_SCALE
+var sprite_rest_y = -44.0
 
 func make_elite():
     elite = true
@@ -47,22 +56,26 @@ func _ready():
         speed *= 1.12
         fire_interval *= 0.72
         projectile_speed *= 1.08
-        base_sprite_scale = 0.33
+        base_sprite_scale = ELITE_SPRITE_SCALE
 
+    # Keep the visible feet and physics body on the exact same platform surface.
+    sprite_rest_y = BODY_BOTTOM_Y - (SOURCE_OPAQUE_BOTTOM_Y - SOURCE_CENTER_Y) * base_sprite_scale
+
+    # The previous 18x30 collider covered only the lower fraction of the new art,
+    # making some visible enemies hard to hit. This remains forgiving but covers
+    # the torso/head much more reliably while preserving the exact same foot point.
     var collider = CollisionShape2D.new()
     var shape = RectangleShape2D.new()
-    shape.size = Vector2(18, 30)
+    shape.size = Vector2(24, 56)
     collider.shape = shape
-    collider.position = Vector2(0, -3)
+    collider.position = Vector2(0, BODY_BOTTOM_Y - 28.0)
     add_child(collider)
 
-    # High-detail production grunt artwork. Gameplay collision stays identical to the
-    # stable build; only the visual layer changes, so platforming/enemy balance does not.
     sprite = Sprite2D.new()
     sprite.texture = load("res://assets/enemies/clone_grunt_production.png")
     sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
     sprite.scale = Vector2(base_sprite_scale, base_sprite_scale)
-    sprite.position = Vector2(0, SPRITE_REST_Y)
+    sprite.position = Vector2(0, sprite_rest_y)
     if elite:
         sprite.modulate = Color(1.0, 0.83, 0.58, 1.0)
     add_child(sprite)
@@ -77,9 +90,9 @@ func _ready():
     damage_area.collision_mask = 2
     var damage_shape = CollisionShape2D.new()
     var area_shape = RectangleShape2D.new()
-    area_shape.size = Vector2(20, 31)
+    area_shape.size = Vector2(26, 52)
     damage_shape.shape = area_shape
-    damage_shape.position = Vector2(0, -3)
+    damage_shape.position = Vector2(0, BODY_BOTTOM_Y - 26.0)
     damage_area.add_child(damage_shape)
     add_child(damage_area)
     damage_area.body_entered.connect(_on_damage_area_body_entered)
@@ -156,13 +169,13 @@ func _update_visual_motion(delta):
     if moving:
         walk_phase += delta * (12.0 + abs(velocity.x) * 0.035)
         var step = sin(walk_phase)
-        sprite.position.y = SPRITE_REST_Y + step * 1.25
+        sprite.position.y = sprite_rest_y + step * 1.25
         sprite.rotation = step * 0.012
         var squash = step * 0.006
         sprite.scale = Vector2(base_sprite_scale + squash, base_sprite_scale - squash)
         sprite.flip_h = velocity.x < 0.0
     else:
-        sprite.position.y = lerp(sprite.position.y, SPRITE_REST_Y, min(1.0, delta * 14.0))
+        sprite.position.y = lerp(sprite.position.y, sprite_rest_y, min(1.0, delta * 14.0))
         sprite.rotation = lerp(sprite.rotation, 0.0, min(1.0, delta * 14.0))
         sprite.scale = sprite.scale.lerp(Vector2(base_sprite_scale, base_sprite_scale), min(1.0, delta * 14.0))
 
@@ -195,7 +208,7 @@ func _try_shoot(player):
     var projectile = Projectile.new()
     projectile.setup(direction, projectile_speed, 2 if elite else 1, "enemy")
     get_tree().current_scene.add_child(projectile)
-    projectile.global_position = global_position + Vector2(sign(direction.x) * 20.0, -10)
+    projectile.global_position = global_position + Vector2(sign(direction.x) * 20.0, -18.0)
 
 func take_damage(amount, source_position = Vector2.ZERO):
     if dead:
@@ -233,4 +246,4 @@ func _on_died():
 
 func _draw():
     if GameState.debug_collision_visible:
-        draw_rect(Rect2(Vector2(-9, -18), Vector2(18, 30)), Color(1.0, 0.2, 0.2, 0.55), false, 1.0)
+        draw_rect(Rect2(Vector2(-12, -44), Vector2(24, 56)), Color(1.0, 0.2, 0.2, 0.55), false, 1.0)
