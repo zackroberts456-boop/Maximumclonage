@@ -11,7 +11,15 @@ const PATROL_RADIUS = 70.0
 const RETREAT_RANGE = 58.0
 const SPIT_MIN_RANGE = 72.0
 const SPIT_MAX_RANGE = 176.0
-const SPRITE_REST_Y = -32.0
+
+# Acid Spitter source art fills much more of its 224x224 texture than the Clone
+# Grunt, so using the same numeric scale made the enemy roster visibly inconsistent.
+# 0.34 gives it a ~75 px silhouette, matching the corrected regular-enemy scale.
+const BASE_SPRITE_SCALE = 0.34
+const BODY_BOTTOM_Y = 12.0
+const SOURCE_CENTER_Y = 112.0
+const SOURCE_OPAQUE_BOTTOM_Y = 220.0
+const SPRITE_REST_Y = BODY_BOTTOM_Y - (SOURCE_OPAQUE_BOTTOM_Y - SOURCE_CENTER_Y) * BASE_SPRITE_SCALE
 
 var spawn_x = 0.0
 var patrol_direction = -1
@@ -38,17 +46,20 @@ func _ready():
     speed *= float(difficulty["enemy_speed_scale"])
     spit_interval *= float(difficulty["enemy_fire_interval_scale"])
 
+    # Ground-anchored collider. The previous 20x30 body was much smaller than the
+    # visible creature, which could make apparent hits miss. Keep the same bottom
+    # point used by stage placement while expanding upward into the visible torso.
     var collider = CollisionShape2D.new()
     var shape = RectangleShape2D.new()
-    shape.size = Vector2(20, 30)
+    shape.size = Vector2(28, 56)
     collider.shape = shape
-    collider.position = Vector2(0, -3)
+    collider.position = Vector2(0, BODY_BOTTOM_Y - 28.0)
     add_child(collider)
 
     sprite = Sprite2D.new()
     sprite.texture = load("res://assets/enemies/acid_spitter_production.png")
     sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-    sprite.scale = Vector2(0.30, 0.30)
+    sprite.scale = Vector2(BASE_SPRITE_SCALE, BASE_SPRITE_SCALE)
     sprite.position = Vector2(0, SPRITE_REST_Y)
     add_child(sprite)
 
@@ -62,9 +73,9 @@ func _ready():
     damage_area.collision_mask = 2
     var damage_shape = CollisionShape2D.new()
     var area_shape = RectangleShape2D.new()
-    area_shape.size = Vector2(22, 31)
+    area_shape.size = Vector2(30, 52)
     damage_shape.shape = area_shape
-    damage_shape.position = Vector2(0, -3)
+    damage_shape.position = Vector2(0, BODY_BOTTOM_Y - 26.0)
     damage_area.add_child(damage_shape)
     add_child(damage_area)
     damage_area.body_entered.connect(_on_damage_area_body_entered)
@@ -176,7 +187,7 @@ func _fire_spit(player):
     var glob = AcidGlob.new()
     glob.setup(direction_x, horizontal_speed, upward_speed, 2)
     get_tree().current_scene.add_child(glob)
-    glob.global_position = global_position + Vector2(direction_x * 18.0, -22.0)
+    glob.global_position = global_position + Vector2(direction_x * 24.0, -24.0)
     recoil_left = 0.16
 
 func _update_visual_motion(delta):
@@ -193,13 +204,13 @@ func _update_visual_motion(delta):
 
     if windup_left > 0.0:
         var pulse = 1.0 + sin(windup_left * 32.0) * 0.025
-        sprite.scale = Vector2(0.30 * pulse, 0.30 / pulse)
+        sprite.scale = Vector2(BASE_SPRITE_SCALE * pulse, BASE_SPRITE_SCALE / pulse)
         sprite.position.x = (-1.0 if sprite.flip_h else 1.0) * 1.0
     elif recoil_left > 0.0:
-        sprite.scale = Vector2(0.306, 0.294)
+        sprite.scale = Vector2(BASE_SPRITE_SCALE * 1.02, BASE_SPRITE_SCALE * 0.98)
         sprite.position.x = (2.0 if sprite.flip_h else -2.0)
     else:
-        sprite.scale = sprite.scale.lerp(Vector2(0.30, 0.30), min(1.0, delta * 16.0))
+        sprite.scale = sprite.scale.lerp(Vector2(BASE_SPRITE_SCALE, BASE_SPRITE_SCALE), min(1.0, delta * 16.0))
         sprite.position.x = lerp(sprite.position.x, 0.0, min(1.0, delta * 16.0))
 
 func _patrol_velocity():
@@ -209,7 +220,7 @@ func _patrol_velocity():
 
 func _has_floor_ahead(direction: int):
     var space_state = get_world_2d().direct_space_state
-    var from = global_position + Vector2(direction * 12.0, -1.0)
+    var from = global_position + Vector2(direction * 14.0, -1.0)
     var to = from + Vector2(0.0, 35.0)
     var query = PhysicsRayQueryParameters2D.create(from, to, 1)
     query.exclude = [get_rid()]
@@ -245,10 +256,10 @@ func _on_died():
     GameState.register_enemy_kill(175)
     defeated.emit(self)
     var tween = create_tween()
-    tween.tween_property(sprite, "scale", Vector2(0.34, 0.22), 0.09)
+    tween.tween_property(sprite, "scale", Vector2(0.38, 0.25), 0.09)
     tween.tween_property(sprite, "modulate", Color(0.38, 1.0, 0.08, 0.0), 0.30)
     tween.finished.connect(queue_free)
 
 func _draw():
     if GameState.debug_collision_visible:
-        draw_rect(Rect2(Vector2(-10, -18), Vector2(20, 30)), Color(0.3, 1.0, 0.15, 0.55), false, 1.0)
+        draw_rect(Rect2(Vector2(-14, -44), Vector2(28, 56)), Color(0.3, 1.0, 0.15, 0.55), false, 1.0)
