@@ -7,6 +7,37 @@ const GameRules = preload("res://scripts/data/game_rules.gd")
 const HealthComponent = preload("res://scripts/components/health_component.gd")
 const WeaponController = preload("res://scripts/weapons/weapon_controller.gd")
 
+# Calibrated from the production 224x160 runtime frames. Nada, Bella, Lawrence,
+# Vance and Zack land at essentially the same standing visual height. Andre's
+# source artwork is intentionally shorter, leaving him about 8-9% shorter while
+# retaining the same gameplay hitbox and jump envelope.
+const CHARACTER_VISUAL_SCALE = {
+    "nada": 0.542,
+    "bella": 0.540,
+    "andre": 0.540,
+    "lawrence": 0.545,
+    "vance": 0.540,
+    "zack": 0.540,
+}
+
+# Frames 24-31 are the actual upright firing sequences in every production atlas.
+# The previous 34-39 mapping points into crouch/prone transitions for several
+# characters (most visibly Zack), which made them appear to fall and spin while firing.
+const STANDING_FIRE_FRAMES = {
+    "nada": [24, 25, 26, 27, 28, 29, 30, 31],
+    "bella": [24, 25, 26, 27, 28, 29, 30, 31],
+    # Andre frame 29 is an isolated projectile/effect frame, not a body pose.
+    "andre": [24, 25, 26, 27, 28, 30, 31],
+    "lawrence": [24, 25, 26, 27, 28, 29, 30, 31],
+    "vance": [24, 25, 26, 27, 28, 29, 30, 31],
+    "zack": [24, 25, 26, 27, 28, 29, 30, 31],
+}
+
+# All player source frames finish at y ~= 158 inside a 160 px cell. With the
+# calibrated 0.54-ish scale, -30 aligns the visible feet with the standardized
+# physics body instead of drawing the lower legs inside the platform art.
+const PLAYER_SPRITE_Y = -30.0
+
 var character_id = "nada"
 var character_data = {}
 var move_speed = 72.0
@@ -43,10 +74,9 @@ func _ready():
 
     sprite = AnimatedSprite2D.new()
     sprite.name = "Sprite"
-    sprite.position = Vector2(0, -18)
-    # The source atlases were being displayed unnecessarily small on phones.
-    # This still fits the standardized hitbox but keeps more of the authored pixel detail visible.
-    sprite.scale = Vector2(0.54, 0.54)
+    sprite.position = Vector2(0, PLAYER_SPRITE_Y)
+    var calibrated_scale = float(CHARACTER_VISUAL_SCALE.get(character_id, 0.540))
+    sprite.scale = Vector2(calibrated_scale, calibrated_scale)
     sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
     sprite.sprite_frames = _build_sprite_frames(load(character_data["atlas"]))
     add_child(sprite)
@@ -195,13 +225,8 @@ func _build_sprite_frames(texture):
     _add_animation(frames, texture, "idle", [0, 1, 2, 3, 4, 5], 7.0, true)
     _add_animation(frames, texture, "run", [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19], 13.0, true)
 
-    # Nada's original firing range crosses source-pose boundaries. These clean
-    # full-height ready-fire frames prevent the clipped fragment that was appearing
-    # behind her until the dedicated production firing strip is wired into the repo.
-    if character_id == "nada":
-        _add_animation(frames, texture, "shoot", [24, 25, 26, 27, 28, 29], 10.0, true)
-    else:
-        _add_animation(frames, texture, "shoot", [34, 35, 36, 37, 38, 39], 14.0, true)
+    var fire_frames = STANDING_FIRE_FRAMES.get(character_id, [24, 25, 26, 27, 28, 29, 30, 31])
+    _add_animation(frames, texture, "shoot", fire_frames, 12.0, true)
 
     _add_animation(frames, texture, "jump", [40, 41, 42, 43, 44, 45, 46, 47], 10.0, true)
     _add_animation(frames, texture, "death", [56, 57, 58, 59, 60, 61, 62, 63], 9.0, false)
